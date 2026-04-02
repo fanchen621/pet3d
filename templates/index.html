@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>宠物大冒险 - 班级优化大师伴侣</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="loading-screen">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">正在加载宠物大冒险...</div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Modal -->
+    <div id="modal-overlay" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-title" id="modal-title">确认</div>
+            <div class="modal-body" id="modal-body">确定要执行此操作吗？</div>
+            <div class="modal-actions">
+                <button class="modal-btn" id="modal-cancel">取消</button>
+                <button class="modal-btn primary" id="modal-ok">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Evolution Overlay -->
+    <div id="evolution-overlay" class="evolution-overlay">
+        <canvas id="evolution-particles" style="position:absolute;top:0;left:0;width:100%;height:100%;"></canvas>
+        <div class="evolution-text">✨ 进化中... ✨</div>
+    </div>
+
+    <!-- Achievement Popup -->
+    <div id="achievement-popup" class="achievement-popup">
+        <div class="achievement-icon">🏆</div>
+        <div class="achievement-title">成就解锁</div>
+        <div class="achievement-name"></div>
+    </div>
+
+    <!-- Battle Result -->
+    <div id="battle-result" class="battle-result-overlay">
+        <div class="battle-result-icon" id="result-icon">🎉</div>
+        <div class="battle-result-text" id="result-text">胜利!</div>
+        <div class="battle-result-rewards" id="result-rewards">+50 经验</div>
+        <button class="battle-result-btn" id="result-close">继续</button>
+    </div>
+
+    <!-- ===== PET SELECT (First Time) ===== -->
+    <div id="pet-select-screen" class="screen">
+        <div style="position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;padding:20px;">
+            <div class="game-title" style="font-size:2rem;margin-bottom:5px;">选择你的伙伴</div>
+            <div class="game-subtitle" style="margin-bottom:20px;">每只宠物都有独特的属性和技能</div>
+            <div class="pet-select-grid" id="pet-select-grid"></div>
+        </div>
+    </div>
+
+    <!-- ===== MAIN MENU ===== -->
+    <div id="main-menu" class="screen active">
+        <canvas id="menu-particles" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:0;"></canvas>
+        
+        <div class="menu-player-info">
+            <div class="player-avatar">🧑</div>
+            <div class="player-details">
+                <div class="player-name">训练师</div>
+                <div class="player-points">0</div>
+            </div>
+        </div>
+
+        <div style="position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;">
+            <div class="game-title">宠物大冒险</div>
+            <div class="game-subtitle">班级优化大师 · 伴侣应用</div>
+            
+            <div class="menu-buttons">
+                <button class="menu-btn primary" id="btn-adventure">🐾 我的宠物</button>
+                <button class="menu-btn" id="btn-battle">⚔️ 挑战野宠</button>
+                <button class="menu-btn" id="btn-pvp">👥 PvP 对战</button>
+                <button class="menu-btn" id="btn-shop">🛒 宠物商店</button>
+                <button class="menu-btn" id="btn-pets">📚 宠物图鉴</button>
+                <button class="menu-btn" id="btn-ranking">🏆 排行榜</button>
+                <button class="menu-btn" id="btn-points">⭐ 导入积分</button>
+                <button class="menu-btn" id="btn-settings">⚙️ 设置</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== PET HOME ===== -->
+    <div id="pet-home" class="screen">
+        <div class="pet-home-header">
+            <div class="pet-info-bar">
+                <div class="pet-avatar-small">🐉</div>
+                <div>
+                    <div class="pet-name-display">宠物名</div>
+                    <span class="pet-type-badge fire">火</span>
+                    <span class="pet-level" style="font-size:0.8rem;color:#fdcb6e;margin-left:8px;">Lv.1</span>
+                </div>
+            </div>
+            <div class="pet-stats-bar">
+                <div class="stat-item">
+                    <span class="stat-icon">❤️</span>
+                    <div class="stat-bar-container"><div class="stat-bar hp" style="width:100%"></div></div>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-icon">⭐</span>
+                    <div class="stat-bar-container"><div class="stat-bar exp" style="width:30%"></div></div>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-icon">😊</span>
+                    <div class="stat-bar-container"><div class="stat-bar mood" style="width:80%"></div></div>
+                </div>
+            </div>
+            <div class="header-actions">
+                <button class="header-btn" id="btn-back-home">🏠</button>
+            </div>
+        </div>
+
+        <div class="pet-3d-canvas">
+            <canvas id="pet-canvas"></canvas>
+            <div class="pet-interaction-hint">👆 点击宠物互动</div>
+        </div>
+
+        <div class="pet-action-bar">
+            <button class="action-btn" id="btn-feed"><span class="icon">🍎</span>喂食</button>
+            <button class="action-btn" id="btn-play"><span class="icon">🎾</span>玩耍</button>
+            <button class="action-btn" id="btn-battle-wild"><span class="icon">⚔️</span>战斗</button>
+            <button class="action-btn" id="btn-inventory"><span class="icon">🎒</span>背包</button>
+        </div>
+    </div>
+
+    <!-- ===== BATTLE SCREEN ===== -->
+    <div id="battle-screen" class="screen">
+        <div class="battle-header">
+            <div class="battle-pet-info">
+                <div style="font-size:2rem;">🐉</div>
+                <div class="battle-pet-hp">
+                    <div class="battle-pet-name">我的宠物</div>
+                    <div class="battle-level">Lv.1</div>
+                    <div class="battle-hp-bar-outer">
+                        <div class="battle-hp-bar" id="player-hp-bar" style="width:100%"></div>
+                    </div>
+                    <div class="battle-hp-text" id="player-hp-text">100/100</div>
+                </div>
+            </div>
+            <div class="battle-pet-info enemy">
+                <div style="font-size:2rem;">🦊</div>
+                <div class="battle-pet-hp">
+                    <div class="battle-pet-name">野生宠物</div>
+                    <div class="battle-level">Lv.1</div>
+                    <div class="battle-hp-bar-outer">
+                        <div class="battle-hp-bar" id="enemy-hp-bar" style="width:100%"></div>
+                    </div>
+                    <div class="battle-hp-text" id="enemy-hp-text">80/80</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="battle-arena">
+            <canvas id="battle-canvas"></canvas>
+            <div class="battle-turn-indicator" id="turn-indicator">你的回合</div>
+            <div class="battle-log-container" id="battle-log"></div>
+        </div>
+
+        <div class="battle-actions" id="battle-actions">
+            <button class="battle-btn attack" id="btn-attack">⚔️ 攻击</button>
+            <button class="battle-btn defend" id="btn-defend">🛡️ 防御</button>
+            <button class="battle-btn special" id="btn-special">✨ 特技</button>
+            <button class="battle-btn flee" id="btn-flee">🏃 逃跑</button>
+        </div>
+
+        <div style="position:absolute;top:10px;right:10px;z-index:25;">
+            <button class="back-btn" id="btn-back-battle">✕ 退出</button>
+        </div>
+    </div>
+
+    <!-- ===== SHOP SCREEN ===== -->
+    <div id="shop-screen" class="screen">
+        <div class="shop-header">
+            <div class="shop-title">🛒 宠物商店</div>
+            <div style="display:flex;align-items:center;gap:15px;">
+                <div class="shop-points">⭐ <span id="shop-points">0</span></div>
+                <button class="back-btn" id="btn-back-shop">← 返回</button>
+            </div>
+        </div>
+        <div class="shop-tabs" id="shop-tabs"></div>
+        <div class="shop-content">
+            <div class="shop-grid" id="shop-grid"></div>
+        </div>
+    </div>
+
+    <!-- ===== INVENTORY SCREEN ===== -->
+    <div id="inventory-screen" class="screen">
+        <div class="inventory-header">
+            <div class="inventory-title">🎒 背包</div>
+            <button class="back-btn" id="btn-back-inventory">← 返回</button>
+        </div>
+        <div class="inventory-content">
+            <div class="inventory-tabs" id="inventory-tabs"></div>
+            <div class="inventory-grid" id="inventory-grid"></div>
+        </div>
+    </div>
+
+    <!-- ===== RANKING SCREEN ===== -->
+    <div id="ranking-screen" class="screen">
+        <div class="ranking-header">
+            <div class="ranking-title">🏆 宠物排行榜</div>
+            <button class="back-btn" id="btn-back-ranking">← 返回</button>
+        </div>
+        <div class="ranking-content">
+            <div class="ranking-list" id="ranking-list"></div>
+        </div>
+    </div>
+
+    <!-- ===== PETS COLLECTION ===== -->
+    <div id="pets-screen" class="screen">
+        <div class="inventory-header">
+            <div class="inventory-title">📚 宠物图鉴</div>
+            <button class="back-btn" id="btn-back-pets">← 返回</button>
+        </div>
+        <div class="pets-grid" id="pets-grid"></div>
+    </div>
+
+    <!-- ===== POINTS INPUT ===== -->
+    <div id="points-screen" class="screen">
+        <div class="points-panel">
+            <div class="points-title">⭐ 导入积分</div>
+            <div class="points-subtitle">从班级优化大师导入你的积分</div>
+            <div class="points-input-group">
+                <input type="number" class="points-input" id="points-input" placeholder="输入积分数量" min="1">
+                <button class="points-submit" id="points-submit">导入</button>
+            </div>
+            <div class="csv-upload-area" onclick="document.getElementById('csv-upload').click()">
+                <div class="csv-upload-icon">📄</div>
+                <div class="csv-upload-text">点击上传CSV文件批量导入</div>
+                <input type="file" id="csv-upload" accept=".csv" style="display:none;">
+            </div>
+        </div>
+        <div style="position:absolute;top:20px;left:20px;">
+            <button class="back-btn" id="btn-back-points">← 返回</button>
+        </div>
+    </div>
+
+    <!-- ===== SETTINGS ===== -->
+    <div id="settings-screen" class="screen">
+        <div class="settings-panel">
+            <div class="settings-title">⚙️ 设置</div>
+            <div class="settings-group">
+                <label class="settings-label">训练师名字</label>
+                <input type="text" class="settings-input" id="settings-name" placeholder="输入你的名字" maxlength="20">
+            </div>
+            <div class="settings-actions">
+                <button class="settings-btn danger" id="btn-reset-game">重置游戏</button>
+                <button class="settings-btn primary" id="btn-save-settings">保存</button>
+            </div>
+        </div>
+        <div style="position:absolute;top:20px;left:20px;">
+            <button class="back-btn" id="btn-back-settings">← 返回</button>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="/static/js/effects.js"></script>
+    <script src="/static/js/pets.js"></script>
+    <script src="/static/js/battle.js"></script>
+    <script src="/static/js/shop.js"></script>
+    <script src="/static/js/ranking.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
