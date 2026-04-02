@@ -52,7 +52,7 @@
 
     <!-- ===== PET SELECT (First Time) ===== -->
     <div id="pet-select-screen" class="screen">
-        <div style="position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;padding:20px;">
+        <div style="position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;padding:20px;overflow-y:auto;">
             <div class="game-title" style="font-size:2rem;margin-bottom:5px;">选择你的伙伴</div>
             <div class="game-subtitle" style="margin-bottom:20px;">每只宠物都有独特的属性和技能</div>
             <div class="pet-select-grid" id="pet-select-grid"></div>
@@ -64,7 +64,7 @@
         <canvas id="menu-particles" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:0;"></canvas>
         
         <div class="menu-player-info">
-            <div class="player-avatar">🧑</div>
+            <div class="player-avatar">🧑‍🏫</div>
             <div class="player-details">
                 <div class="player-name">训练师</div>
                 <div class="player-points">0</div>
@@ -76,14 +76,145 @@
             <div class="game-subtitle">班级优化大师 · 伴侣应用</div>
             
             <div class="menu-buttons">
-                <button class="menu-btn primary" id="btn-adventure">🐾 我的宠物</button>
+                <button class="menu-btn primary" id="btn-classroom">🏫 班级管理</button>
+                <button class="menu-btn" id="btn-adventure">🐾 我的宠物</button>
                 <button class="menu-btn" id="btn-battle">⚔️ 挑战野宠</button>
-                <button class="menu-btn" id="btn-pvp">👥 PvP 对战</button>
                 <button class="menu-btn" id="btn-shop">🛒 宠物商店</button>
                 <button class="menu-btn" id="btn-pets">📚 宠物图鉴</button>
                 <button class="menu-btn" id="btn-ranking">🏆 排行榜</button>
-                <button class="menu-btn" id="btn-points">⭐ 导入积分</button>
                 <button class="menu-btn" id="btn-settings">⚙️ 设置</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== CLASSROOM SCREEN ===== -->
+    <div id="classroom-screen" class="screen">
+        <div class="classroom-header">
+            <div class="classroom-title">🏫 班级管理</div>
+            <div class="classroom-actions">
+                <button class="classroom-btn import" id="btn-import-excel">📥 导入学生</button>
+                <button class="back-btn" id="btn-back-classroom">← 返回</button>
+            </div>
+        </div>
+
+        <!-- Stats Bar -->
+        <div class="classroom-stats" id="classroom-stats">
+            <div class="stat-card">
+                <div class="stat-value" id="stat-students">0</div>
+                <div class="stat-label">学生数</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-pets">0</div>
+                <div class="stat-label">宠物数</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-avg-level">0</div>
+                <div class="stat-label">平均等级</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-top-cp">0</div>
+                <div class="stat-label">最高战力</div>
+            </div>
+        </div>
+
+        <!-- Student Grid -->
+        <div class="classroom-content">
+            <div class="student-grid" id="student-grid">
+                <div class="empty-classroom">
+                    <div class="empty-icon">📋</div>
+                    <div class="empty-text">还没有学生数据</div>
+                    <div class="empty-hint">点击「导入学生」上传班级优化大师导出的Excel文件</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== EXCEL IMPORT MODAL ===== -->
+    <div id="import-modal" class="modal-overlay">
+        <div class="modal import-modal">
+            <div class="modal-title">📥 导入学生名单</div>
+            <div class="import-body">
+                <div class="import-steps">
+                    <div class="import-step">
+                        <div class="step-num">1</div>
+                        <div class="step-text">从班级优化大师导出学生Excel文件</div>
+                    </div>
+                    <div class="import-step">
+                        <div class="step-num">2</div>
+                        <div class="step-text">点击下方区域上传 .xlsx / .xls 文件</div>
+                    </div>
+                    <div class="import-step">
+                        <div class="step-num">3</div>
+                        <div class="step-text">系统自动识别学生姓名和积分列</div>
+                    </div>
+                </div>
+                <div class="import-dropzone" id="import-dropzone" onclick="document.getElementById('excel-upload').click()">
+                    <div class="dropzone-icon">📄</div>
+                    <div class="dropzone-text">点击选择文件 或 拖拽到此处</div>
+                    <div class="dropzone-hint">支持 .xlsx / .xls 格式，自动识别姓名、学号、性别、积分列</div>
+                    <input type="file" id="excel-upload" accept=".xlsx,.xls,.csv" style="display:none;">
+                </div>
+                <div id="import-progress" class="import-progress" style="display:none;">
+                    <div class="progress-bar"><div class="progress-fill" id="import-progress-fill"></div></div>
+                    <div class="progress-text" id="import-progress-text">导入中...</div>
+                </div>
+                <div id="import-result" class="import-result" style="display:none;"></div>
+            </div>
+            <div class="modal-actions">
+                <button class="modal-btn" id="import-cancel">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== STUDENT DETAIL MODAL ===== -->
+    <div id="student-modal" class="modal-overlay">
+        <div class="modal student-detail-modal">
+            <div class="student-detail-header">
+                <div class="student-avatar-large" id="student-avatar">🧑</div>
+                <div class="student-detail-info">
+                    <div class="student-detail-name" id="student-detail-name">学生名</div>
+                    <div class="student-detail-no" id="student-detail-no">学号</div>
+                </div>
+                <button class="modal-close-btn" id="student-modal-close">✕</button>
+            </div>
+
+            <!-- Points Section -->
+            <div class="student-points-section">
+                <div class="points-display">
+                    <div class="points-value" id="student-points-value">0</div>
+                    <div class="points-label">当前积分</div>
+                </div>
+                <div class="points-controls">
+                    <div class="points-row">
+                        <input type="number" class="points-delta-input" id="points-delta-input" placeholder="输入积分变化" min="-999" max="999">
+                        <input type="text" class="points-reason-input" id="points-reason-input" placeholder="原因（可选）">
+                    </div>
+                    <div class="points-buttons">
+                        <button class="points-btn add" id="btn-add-points">➕ 加分</button>
+                        <button class="points-btn subtract" id="btn-sub-points">➖ 减分</button>
+                        <button class="points-btn quick-add" data-delta="1">+1</button>
+                        <button class="points-btn quick-add" data-delta="3">+3</button>
+                        <button class="points-btn quick-add" data-delta="5">+5</button>
+                        <button class="points-btn quick-sub" data-delta="-1">-1</button>
+                        <button class="points-btn quick-sub" data-delta="-3">-3</button>
+                        <button class="points-btn quick-sub" data-delta="-5">-5</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pet Section -->
+            <div class="student-pet-section" id="student-pet-section">
+                <div class="pet-section-title">🐾 领养宠物</div>
+                <div id="student-pet-display">
+                    <div class="no-pet-hint">该学生还未领养宠物</div>
+                    <div class="pet-choose-grid" id="pet-choose-grid"></div>
+                </div>
+            </div>
+
+            <!-- Point Logs -->
+            <div class="point-logs-section">
+                <div class="logs-title">📊 积分记录</div>
+                <div class="point-logs-list" id="point-logs-list"></div>
             </div>
         </div>
     </div>
@@ -223,26 +354,6 @@
         <div class="pets-grid" id="pets-grid"></div>
     </div>
 
-    <!-- ===== POINTS INPUT ===== -->
-    <div id="points-screen" class="screen">
-        <div class="points-panel">
-            <div class="points-title">⭐ 导入积分</div>
-            <div class="points-subtitle">从班级优化大师导入你的积分</div>
-            <div class="points-input-group">
-                <input type="number" class="points-input" id="points-input" placeholder="输入积分数量" min="1">
-                <button class="points-submit" id="points-submit">导入</button>
-            </div>
-            <div class="csv-upload-area" onclick="document.getElementById('csv-upload').click()">
-                <div class="csv-upload-icon">📄</div>
-                <div class="csv-upload-text">点击上传CSV文件批量导入</div>
-                <input type="file" id="csv-upload" accept=".csv" style="display:none;">
-            </div>
-        </div>
-        <div style="position:absolute;top:20px;left:20px;">
-            <button class="back-btn" id="btn-back-points">← 返回</button>
-        </div>
-    </div>
-
     <!-- ===== SETTINGS ===== -->
     <div id="settings-screen" class="screen">
         <div class="settings-panel">
@@ -267,6 +378,7 @@
     <script src="/static/js/battle.js"></script>
     <script src="/static/js/shop.js"></script>
     <script src="/static/js/ranking.js"></script>
+    <script src="/static/js/classroom.js"></script>
     <script src="/static/js/app.js"></script>
 </body>
 </html>

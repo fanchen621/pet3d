@@ -9,7 +9,9 @@ const App = {
         pet: null,
         pets: [],
         inventory: [],
-        achievements: []
+        achievements: [],
+        students: [],
+        classroom_stats: {}
     },
     playerScene: null,
     playerRenderer: null,
@@ -46,19 +48,24 @@ const App = {
             if (data.pets) this.gameState.pets = data.pets;
             if (data.inventory) this.gameState.inventory = data.inventory;
             if (data.achievements) this.gameState.achievements = data.achievements;
+            if (data.students) this.gameState.students = data.students;
+            if (data.classroom_stats) this.gameState.classroom_stats = data.classroom_stats;
         } catch (e) {
             console.error('Failed to load state:', e);
         }
     },
     
     bindEvents() {
+        document.getElementById('btn-classroom')?.addEventListener('click', () => {
+            Classroom.init();
+            this.showScreen('classroom-screen');
+        });
         document.getElementById('btn-adventure')?.addEventListener('click', () => this.showScreen('pet-home'));
         document.getElementById('btn-battle')?.addEventListener('click', () => this.startBattle('pve'));
         document.getElementById('btn-pvp')?.addEventListener('click', () => this.startBattle('pvp'));
         document.getElementById('btn-shop')?.addEventListener('click', () => { Shop.init(); this.showScreen('shop-screen'); });
         document.getElementById('btn-pets')?.addEventListener('click', () => { this.showPetsScreen(); });
         document.getElementById('btn-ranking')?.addEventListener('click', () => { Ranking.init(); this.showScreen('ranking-screen'); });
-        document.getElementById('btn-points')?.addEventListener('click', () => this.showScreen('points-screen'));
         document.getElementById('btn-settings')?.addEventListener('click', () => this.showSettings(false));
         
         document.getElementById('btn-back-home')?.addEventListener('click', () => this.showScreen('main-menu'));
@@ -67,16 +74,13 @@ const App = {
         document.getElementById('btn-back-ranking')?.addEventListener('click', () => this.showScreen('main-menu'));
         document.getElementById('btn-back-pets')?.addEventListener('click', () => this.showScreen('main-menu'));
         document.getElementById('btn-back-battle')?.addEventListener('click', () => { Battle.endBattle(); this.showScreen('main-menu'); });
-        document.getElementById('btn-back-points')?.addEventListener('click', () => this.showScreen('main-menu'));
+        document.getElementById('btn-back-classroom')?.addEventListener('click', () => this.showScreen('main-menu'));
         document.getElementById('btn-back-settings')?.addEventListener('click', () => this.showScreen('main-menu'));
         
         document.getElementById('btn-feed')?.addEventListener('click', () => this.feedPet());
         document.getElementById('btn-play')?.addEventListener('click', () => this.playWithPet());
         document.getElementById('btn-battle-wild')?.addEventListener('click', () => this.startBattle('pve'));
         document.getElementById('btn-inventory')?.addEventListener('click', () => { Inventory.init(); this.showScreen('inventory-screen'); });
-        
-        document.getElementById('points-submit')?.addEventListener('click', () => this.submitPoints());
-        document.getElementById('csv-upload')?.addEventListener('change', (e) => this.importCSV(e));
         
         document.getElementById('btn-save-settings')?.addEventListener('click', () => this.saveSettings());
         document.getElementById('btn-reset-game')?.addEventListener('click', () => this.resetGame());
@@ -140,36 +144,23 @@ const App = {
         // Ground
         const groundGeo = new THREE.CircleGeometry(3, 32);
         const groundMat = new THREE.MeshStandardMaterial({
-            color: 0x2d3436,
-            metalness: 0.3,
-            roughness: 0.8,
-            transparent: true,
-            opacity: 0.5
+            color: 0x2d3436, metalness: 0.3, roughness: 0.8,
+            transparent: true, opacity: 0.5
         });
         const ground = new THREE.Mesh(groundGeo, groundMat);
         ground.rotation.x = -Math.PI / 2;
         ground.position.y = -0.01;
         this.playerScene.add(ground);
         
-        // Day/night based on time
         const hour = new Date().getHours();
-        if (hour >= 6 && hour < 18) {
-            this.playerScene.background = new THREE.Color(0x1a1a2e);
-        } else {
-            this.playerScene.background = new THREE.Color(0x0a0a1a);
-        }
+        this.playerScene.background = new THREE.Color((hour >= 6 && hour < 18) ? 0x1a1a2e : 0x0a0a1a);
         
-        // Create pet
         if (this.gameState.pet) {
             this.playerPet = Pets3D.createPet(this.playerScene, this.gameState.pet.type, this.gameState.pet);
         }
         
-        // Ambient particles
         Effects.createAmbientParticles(this.playerScene, this.gameState.pet?.type || 'default');
-        
-        // Click interaction
         canvas.onclick = (e) => this.onPetClick(e);
-        
         this.animatePetScene();
     },
     
@@ -191,20 +182,13 @@ const App = {
         
         const animate = (time) => {
             this.animationFrameId = requestAnimationFrame(animate);
-            
-            if (this.playerPet) {
-                this.playerPet.animate(time);
-            }
-            
-            // Animate ambient particles
+            if (this.playerPet) this.playerPet.animate(time);
             this.playerScene.children.forEach(child => {
                 if (child.userData.animate) child.userData.animate(time);
             });
-            
             Effects.updateFloatingTexts();
             Effects.updateParticles();
             Effects.applyShake(this.playerCamera);
-            
             this.playerRenderer.render(this.playerScene, this.playerCamera);
         };
         
@@ -235,7 +219,6 @@ const App = {
     },
     
     startAmbientParticles() {
-        // Particle background for main menu
         const canvas = document.getElementById('menu-particles');
         if (!canvas) return;
         
@@ -263,26 +246,21 @@ const App = {
             }
             
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
             particles.forEach(p => {
                 p.x += p.vx;
                 p.y += p.vy;
-                
                 if (p.y < -10) { p.y = canvas.height + 10; p.x = Math.random() * canvas.width; }
                 if (p.x < -10) p.x = canvas.width + 10;
                 if (p.x > canvas.width + 10) p.x = -10;
-                
                 ctx.beginPath();
                 ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
                 ctx.fillStyle = p.color;
                 ctx.globalAlpha = p.alpha;
                 ctx.fill();
             });
-            
             ctx.globalAlpha = 1;
             requestAnimationFrame(animateMenu);
         };
-        
         animateMenu();
         
         window.addEventListener('resize', () => {
@@ -292,33 +270,30 @@ const App = {
     },
     
     updateUI() {
-        // Update player info in header
         const nameEls = document.querySelectorAll('.player-name');
         const pointsEls = document.querySelectorAll('.player-points');
-        
         nameEls.forEach(el => el.textContent = this.gameState.player.name || '训练师');
         pointsEls.forEach(el => el.textContent = this.gameState.player.points || 0);
         
-        // Update pet info
         if (this.gameState.pet) {
             const pet = this.gameState.pet;
-            
             document.querySelectorAll('.pet-name-display').forEach(el => el.textContent = pet.name);
             
-            const typeNames = { dragon: '火', fox: '冰', bear: '电', rabbit: '自然', cat: '暗', angel: '光' };
+            const typeNames = {
+                dragon: '火', fox: '冰', bear: '电', rabbit: '自然', cat: '暗', angel: '光',
+                phoenix: '火', krystal: '水', tiger: '电', sprite: '自然', wolf: '暗', unicorn: '光'
+            };
             document.querySelectorAll('.pet-type-badge').forEach(el => {
                 el.textContent = typeNames[pet.type] || pet.type;
                 el.className = `pet-type-badge ${pet.type}`;
             });
             
-            // Update stat bars
             this.updateStatBar('hp', pet.hp, pet.max_hp);
             this.updateStatBar('exp', pet.exp, pet.exp_to_next);
             this.updateStatBar('hunger', pet.mood || 100, 100);
             this.updateStatBar('mood', pet.mood || 100, 100);
         }
         
-        // Update shop points
         const shopPoints = document.getElementById('shop-points');
         if (shopPoints) shopPoints.textContent = this.gameState.player.points || 0;
     },
@@ -405,14 +380,13 @@ const App = {
         const activePetId = this.gameState.pet?.id;
         
         const petEmojis = {
-            dragon: '🐉', fox: '🦊', bear: '🐻',
-            rabbit: '🐰', cat: '🐱', angel: '👼'
+            dragon: '🐉', fox: '🦊', bear: '🐻', rabbit: '🐰', cat: '🐱', angel: '👼',
+            phoenix: '🔥', krystal: '🐬', tiger: '🐯', sprite: '🌿', wolf: '🐺', unicorn: '🦄'
         };
         
         for (const [type, info] of Object.entries(allTypes)) {
             const owned = ownedPets.find(p => p.type === type);
             const card = document.createElement('div');
-            
             card.className = `pet-card ${owned ? '' : 'locked'} ${owned?.id === activePetId ? 'active' : ''}`;
             
             card.innerHTML = `
@@ -454,68 +428,6 @@ const App = {
         }
     },
     
-    async submitPoints() {
-        const input = document.getElementById('points-input');
-        const amount = parseInt(input.value);
-        
-        if (!amount || amount <= 0) {
-            this.showToast('请输入有效的积分数', 'error');
-            return;
-        }
-        
-        try {
-            const res = await this.api('/api/add_points', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ points: amount })
-            });
-            
-            if (res.success) {
-                this.gameState.player.points = res.total_points;
-                this.updateUI();
-                input.value = '';
-                this.showToast(`成功导入 ${amount} 积分！`, 'success');
-            }
-        } catch (e) {
-            this.showToast('导入积分失败', 'error');
-        }
-    },
-    
-    async importCSV(event) {
-        const file = event.target.files[0];
-        if (!file) return;
-        
-        const text = await file.text();
-        const lines = text.split('\n').filter(l => l.trim());
-        
-        let totalPoints = 0;
-        lines.forEach(line => {
-            const parts = line.split(',');
-            const pts = parseInt(parts[parts.length - 1]);
-            if (!isNaN(pts)) totalPoints += pts;
-        });
-        
-        if (totalPoints > 0) {
-            try {
-                const res = await this.api('/api/add_points', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ points: totalPoints })
-                });
-                
-                if (res.success) {
-                    this.gameState.player.points = res.total_points;
-                    this.updateUI();
-                    this.showToast(`CSV导入成功！获得 ${totalPoints} 积分`, 'success');
-                }
-            } catch (e) {
-                this.showToast('CSV导入失败', 'error');
-            }
-        }
-        
-        event.target.value = '';
-    },
-    
     showSettings(isFirstTime) {
         const nameInput = document.getElementById('settings-name');
         if (nameInput) nameInput.value = this.gameState.player.name || '';
@@ -531,12 +443,18 @@ const App = {
         if (!grid) return;
         
         const pets = [
-            { type: 'dragon', name: '龙宝宝', emoji: '🐉', element: '火', desc: '高攻击，火焰吐息', color: '#e74c3c' },
-            { type: 'fox', name: '冰晶狐', emoji: '🦊', element: '冰', desc: '高速度，冰晶射线', color: '#74b9ff' },
-            { type: 'bear', name: '雷霆熊', emoji: '🐻', element: '电', desc: '高体力，雷电爪', color: '#f1c40f' },
-            { type: 'rabbit', name: '花灵兔', emoji: '🐰', element: '自然', desc: '会回复，藤鞭', color: '#2ecc71' },
-            { type: 'cat', name: '暗影猫', emoji: '🐱', element: '暗', desc: '高速高攻，暗影爪', color: '#8e44ad' },
-            { type: 'angel', name: '光明天使', emoji: '👼', element: '光', desc: '均衡型，圣光弹', color: '#f39c12' },
+            { type: 'dragon', name: '龙宝宝', emoji: '🐉', element: '火', desc: '高攻击，火焰吐息', color: '#e74c3c', rarity: '传说' },
+            { type: 'fox', name: '冰晶狐', emoji: '🦊', element: '冰', desc: '高速度，冰晶射线', color: '#74b9ff', rarity: '史诗' },
+            { type: 'bear', name: '雷霆熊', emoji: '🐻', element: '电', desc: '高体力，雷电爪', color: '#f1c40f', rarity: '史诗' },
+            { type: 'rabbit', name: '花灵兔', emoji: '🐰', element: '自然', desc: '会回复，藤鞭', color: '#2ecc71', rarity: '稀有' },
+            { type: 'cat', name: '暗影猫', emoji: '🐱', element: '暗', desc: '高速高攻，暗影爪', color: '#8e44ad', rarity: '史诗' },
+            { type: 'angel', name: '光明天使', emoji: '👼', element: '光', desc: '均衡型，圣光弹', color: '#f39c12', rarity: '传说' },
+            { type: 'phoenix', name: '凤凰雏鸟', emoji: '🔥', element: '火', desc: '涅槃重生，浴火而战', color: '#ff6348', rarity: '传说' },
+            { type: 'krystal', name: '水灵海马', emoji: '🐬', element: '水', desc: '深海治愈，潮汐之力', color: '#0984e3', rarity: '稀有' },
+            { type: 'tiger', name: '雷纹虎', emoji: '🐯', element: '电', desc: '闪电突袭，雷纹之力', color: '#ffa502', rarity: '史诗' },
+            { type: 'sprite', name: '木灵小妖', emoji: '🌿', element: '自然', desc: '生命之泉，自然守护', color: '#00b894', rarity: '优秀' },
+            { type: 'wolf', name: '暗月狼', emoji: '🐺', element: '暗', desc: '月影突袭，暗月之力', color: '#6c5ce7', rarity: '史诗' },
+            { type: 'unicorn', name: '星光独角兽', emoji: '🦄', element: '光', desc: '星光治愈，彩虹护盾', color: '#ffeaa7', rarity: '传说' },
         ];
         
         grid.innerHTML = '';
@@ -546,14 +464,14 @@ const App = {
             card.style.cssText = `
                 background: linear-gradient(135deg, rgba(${this.hexToRgb(pet.color)},0.2), rgba(0,0,0,0.3));
                 border: 2px solid ${pet.color}40;
-                border-radius: 16px; padding: 20px; cursor: pointer;
-                text-align: center; transition: all 0.3s; width: 150px;
+                border-radius: 16px; padding: 15px; cursor: pointer;
+                text-align: center; transition: all 0.3s; width: 140px;
             `;
             card.innerHTML = `
-                <div style="font-size:3rem;margin-bottom:8px;">${pet.emoji}</div>
-                <div style="font-size:1.1rem;font-weight:700;color:${pet.color};margin-bottom:4px;">${pet.name}</div>
-                <div style="font-size:0.75rem;color:rgba(255,255,255,0.6);margin-bottom:4px;">${pet.element}系</div>
-                <div style="font-size:0.8rem;color:rgba(255,255,255,0.8);">${pet.desc}</div>
+                <div style="font-size:2.5rem;margin-bottom:5px;">${pet.emoji}</div>
+                <div style="font-size:1rem;font-weight:700;color:${pet.color};margin-bottom:3px;">${pet.name}</div>
+                <div style="font-size:0.7rem;color:rgba(255,255,255,0.5);margin-bottom:2px;">${pet.rarity} · ${pet.element}系</div>
+                <div style="font-size:0.75rem;color:rgba(255,255,255,0.8);">${pet.desc}</div>
             `;
             card.onmouseenter = () => { card.style.transform = 'scale(1.08)'; card.style.borderColor = pet.color; };
             card.onmouseleave = () => { card.style.transform = 'scale(1)'; card.style.borderColor = pet.color + '40'; };
@@ -613,7 +531,6 @@ const App = {
                 this.gameState.player = res.player;
                 this.updateUI();
                 this.showToast('设置保存成功！', 'success');
-                // After setting name, go to pet select if no pet yet
                 if (!this.gameState.pet) {
                     this.showPetSelect();
                 } else {
