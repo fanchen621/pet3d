@@ -107,6 +107,28 @@
 
 ---
 
+## v2.0.1 — 2026-04-03 修复 PyCharm 直接运行报错
+
+### 本次对话需求
+用户截图显示从 PyCharm 运行 `app.py` 时报错：
+```
+AttributeError: 'NoneType' object has no attribute 'secret_key'
+```
+
+### 原因
+`app.py` 依赖 `main.py` 来设置工作目录和 sys.path。从 PyCharm 直接运行 `app.py` 时，路径不对导致模块导入失败。
+
+### 修改的文件
+- **`app.py`** — 在模块顶部添加 `sys.path.insert` 和 `os.chdir`，不再依赖 `main.py` 的初始化
+- **`main.py`** — 简化，从 app 模块导入 db，两种启动方式都可用
+
+### 启动方式
+- **方式1**: `python main.py` （自动打开浏览器）
+- **方式2**: 从 PyCharm 直接运行 `app.py` （同样可用）
+- **方式3**: `python app.py` （命令行直接运行）
+
+---
+
 ## 下次更新备忘
 
 ### 已知可优化
