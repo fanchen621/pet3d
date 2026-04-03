@@ -9,6 +9,7 @@ import os
 import sys
 import time
 import threading
+import traceback
 import webbrowser
 
 
@@ -17,11 +18,22 @@ def main():
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-    from app import app, db
+    try:
+        from app import app, db
+    except Exception as e:
+        print(f'\n[错误] 导入模块失败: {e}')
+        traceback.print_exc()
+        input('\n按回车键退出...')
+        sys.exit(1)
 
-    # Database is already initialized in app.py, but ensure it's done
-    db.init_db()
-    db.create_player()
+    try:
+        db.init_db()
+        db.create_player()
+    except Exception as e:
+        print(f'\n[错误] 数据库初始化失败: {e}')
+        traceback.print_exc()
+        input('\n按回车键退出...')
+        sys.exit(1)
 
     PORT = 5555
     URL = f'http://127.0.0.1:{PORT}'
@@ -43,6 +55,13 @@ def main():
 
     try:
         app.run(host='127.0.0.1', port=PORT, debug=False, threaded=True)
+    except OSError as e:
+        if 'Address already in use' in str(e) or '10048' in str(e):
+            print(f'\n[错误] 端口 {PORT} 已被占用！')
+            print('请关闭占用该端口的程序，或修改 main.py 中的 PORT 变量。')
+        else:
+            print(f'\n[错误] 网络错误: {e}')
+        input('\n按回车键退出...')
     except KeyboardInterrupt:
         print('Goodbye!')
 

@@ -129,6 +129,25 @@ AttributeError: 'NoneType' object has no attribute 'secret_key'
 
 ---
 
+## v2.0.2 — 2026-04-03 修复 start.bat 闪退 + 项目整理
+
+### 本次修复
+- **start.bat 闪退修复**
+  - 支持 python / python3 / py -3 三种命令检测，避免 Windows 上找不到 Python 导致闪退
+  - 添加端口 5555 占用检查，提前提示用户
+  - pip 安装失败时显示明确错误信息而非静默退出
+  - main.py 异常退出时显示错误代码并保持窗口打开
+  - 增加详细的故障排除提示（微软商店版 Python 问题等）
+- **main.py 错误处理增强**
+  - 模块导入失败时捕获异常并显示 traceback
+  - 数据库初始化失败时捕获异常
+  - 端口占用时给出明确提示
+  - 所有异常退出前 `input()` 等待用户确认
+- **项目整理**
+  - .gitignore 补充 venv/、*.pyc、*.pyo、*.db
+
+---
+
 ## 下次更新备忘
 
 ### 已知可优化
