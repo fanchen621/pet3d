@@ -6,11 +6,18 @@
 import json
 import random
 import os
+import sys
 import io
 import uuid
 from datetime import datetime
 from flask import Flask, render_template, jsonify, request, session
 from werkzeug.utils import secure_filename
+
+# Ensure working directory is this file's directory (for direct run from PyCharm)
+_app_dir = os.path.dirname(os.path.abspath(__file__))
+if _app_dir not in sys.path:
+    sys.path.insert(0, _app_dir)
+os.chdir(_app_dir)
 
 try:
     import openpyxl

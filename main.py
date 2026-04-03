@@ -1,6 +1,8 @@
 """
 Pet Adventure - Entry Point
 Launches the Flask server and opens the browser.
+
+也可以直接运行 app.py 启动（从PyCharm或命令行）。
 """
 
 import os
@@ -13,14 +15,11 @@ import webbrowser
 def main():
     # Ensure we're in the right directory
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
-
-    # Add current dir to path for imports
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-    from app import app
-    import database as db
+    from app import app, db
 
-    # Initialize database
+    # Database is already initialized in app.py, but ensure it's done
     db.init_db()
     db.create_player()
 
