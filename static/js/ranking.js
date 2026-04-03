@@ -29,7 +29,9 @@ const Ranking = {
         
         const petEmojis = {
             dragon: '🐉', fox: '🦊', bear: '🐻',
-            rabbit: '🐰', cat: '🐱', angel: '👼'
+            rabbit: '🐰', cat: '🐱', angel: '👼',
+            phoenix: '🔥', krystal: '🐬', tiger: '🐯',
+            sprite: '🌿', wolf: '🐺', unicorn: '🦄'
         };
         
         rankings.forEach((entry, index) => {

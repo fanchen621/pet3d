@@ -7,19 +7,30 @@ import json
 import random
 import os
 import io
+import uuid
 from datetime import datetime
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, session
 from werkzeug.utils import secure_filename
+
+try:
+    import openpyxl
+except ImportError:
+    openpyxl = None
+    print("⚠️  警告: openpyxl 未安装，Excel导入功能将不可用。请运行: pip install openpyxl")
 
 import database as db
 import models
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB
+app.secret_key = os.environ.get('SECRET_KEY', 'pet3d-secret-key-change-in-prod')
 
 # Initialize database on startup
 db.init_db()
 db.create_player()
+
+# Per-session battle states
+BATTLE_STATES = {}
 
 SHOP_ITEMS = {
     'food': [
@@ -62,6 +73,14 @@ SHOP_ITEMS = {
         {'id': 'lucky', 'name': '幸运符', 'price': 70, 'type': 'special', 'rarity': 'uncommon'},
         {'id': 'capture', 'name': '宠物球', 'price': 100, 'type': 'special', 'rarity': 'rare'},
     ]
+}
+
+# Battle items that can be used during combat
+BATTLE_ITEMS = {
+    'potion_battle': {'name': '战斗药水', 'icon': '🧪', 'effect': {'heal': 0.3}, 'desc': '恢复30%生命'},
+    'potion_super': {'name': '超级药水', 'icon': '💊', 'effect': {'heal': 0.6}, 'desc': '恢复60%生命'},
+    'capture': {'name': '宠物球', 'icon': '🔮', 'effect': {'capture': True}, 'desc': '尝试捕捉宠物'},
+    'revive': {'name': '复活药水', 'icon': '💖', 'effect': {'revive': 0.5}, 'desc': '复活并恢复50%HP'},
 }
 
 ACHIEVEMENTS = {
@@ -108,6 +127,39 @@ ELEMENT_ADVANTAGE = {
     'fire': 'nature', 'nature': 'ice', 'ice': 'fire',
     'electric': 'light', 'light': 'dark', 'dark': 'electric',
 }
+
+# Elemental reactions: (element1, element2) -> reaction info
+ELEMENTAL_REACTIONS = {
+    ('fire', 'ice'): {'name': '蒸汽', 'bonus_damage': 15, 'desc': '水火相遇产生蒸汽！'},
+    ('ice', 'fire'): {'name': '蒸汽', 'bonus_damage': 15, 'desc': '水火相遇产生蒸汽！'},
+    ('fire', 'electric'): {'name': '等离子', 'bonus_damage': 20, 'desc': '电火交融产生等离子！'},
+    ('electric', 'fire'): {'name': '等离子', 'bonus_damage': 20, 'desc': '电火交融产生等离子！'},
+    ('ice', 'electric'): {'name': '超导', 'bonus_damage': 12, 'desc': '冰电共鸣产生超导！'},
+    ('electric', 'ice'): {'name': '超导', 'bonus_damage': 12, 'desc': '冰电共鸣产生超导！'},
+    ('nature', 'fire'): {'name': '燃烧', 'bonus_damage': 10, 'desc': '自然之力引发燃烧！'},
+    ('dark', 'light'): {'name': '湮灭', 'bonus_damage': 25, 'desc': '光暗碰撞产生湮灭！'},
+    ('light', 'dark'): {'name': '湮灭', 'bonus_damage': 25, 'desc': '光暗碰撞产生湮灭！'},
+    ('nature', 'ice'): {'name': '冰冻植物', 'bonus_damage': 8, 'desc': '植物被冰冻覆盖！'},
+}
+
+
+def get_battle_state():
+    """Get battle state for current session."""
+    sid = session.get('battle_id')
+    return BATTLE_STATES.get(sid) if sid else None
+
+
+def set_battle_state(state):
+    """Set battle state for current session."""
+    sid = session.get('battle_id')
+    if not sid:
+        sid = str(uuid.uuid4())
+        session['battle_id'] = sid
+    if state is None:
+        BATTLE_STATES.pop(sid, None)
+    else:
+        BATTLE_STATES[sid] = state
+    return state
 
 
 def find_shop_item(item_id):
@@ -220,6 +272,9 @@ def api_add_points():
 @app.route('/api/import_excel', methods=['POST'])
 def api_import_excel():
     """Import students from 班级优化大师 Excel export."""
+    if openpyxl is None:
+        return jsonify({'success': False, 'message': '服务器未安装openpyxl，请联系管理员运行: pip install openpyxl'})
+
     if 'file' not in request.files:
         return jsonify({'success': False, 'message': '请选择文件'})
 
@@ -232,8 +287,6 @@ def api_import_excel():
         return jsonify({'success': False, 'message': '仅支持 .xlsx/.xls/.csv 文件'})
 
     try:
-        import openpyxl
-
         wb = openpyxl.load_workbook(io.BytesIO(file.read()), data_only=True)
         ws = wb.active
 
@@ -513,12 +566,22 @@ def api_start_battle():
     player = db.get_player()
     enemy = models.create_wild_pet(pet['level'])
 
-    app.config['BATTLE_STATE'] = {
+    # Ensure enemy has skills
+    if not enemy.get('skills'):
+        template = models.PET_TYPES.get(enemy['type'], {})
+        enemy['skills'] = [s for s in template.get('skills', []) if s.get('unlock_level', 1) <= enemy.get('level', 1)]
+
+    state = {
         'player_pet': pet,
         'enemy_pet': enemy,
         'mode': mode,
         'turn': 0,
+        'combo_count': 0,
+        'last_element': None,
+        'skill_cooldowns': {},
+        'player_defending': False,
     }
+    set_battle_state(state)
 
     return jsonify({
         'success': True,
@@ -534,7 +597,7 @@ def api_battle_action():
     action = data.get('action', 'attack')
     skill_index = data.get('skill_index', 0)
 
-    state = app.config.get('BATTLE_STATE')
+    state = get_battle_state()
     if not state:
         return jsonify({'success': False, 'message': '没有进行中的战斗'})
 
@@ -547,6 +610,8 @@ def api_battle_action():
     enemy_damage = 0
     battle_over = False
     player_won = False
+    combo_count = state.get('combo_count', 0)
+    reactions = []
 
     def get_multiplier(attacker_elem, defender_elem):
         if ELEMENT_ADVANTAGE.get(attacker_elem) == defender_elem:
@@ -555,48 +620,149 @@ def api_battle_action():
             return 0.75
         return 1.0
 
+    def check_elemental_reaction(attack_elem, target_elem):
+        """Check if two elements create a reaction."""
+        reaction = ELEMENTAL_REACTIONS.get((attack_elem, target_elem))
+        return reaction
+
+    def apply_damage(target_pet, base_damage, attack_elem, attacker_name, is_special=False):
+        nonlocal player_damage, enemy_damage, combo_count, reactions
+
+        target_elem = models.PET_TYPES[target_pet['type']]['element']
+
+        # Check elemental reaction
+        reaction = check_elemental_reaction(attack_elem, target_elem)
+        bonus_dmg = 0
+        if reaction:
+            bonus_dmg = reaction['bonus_damage']
+            reactions.append(reaction)
+
+        # Combo bonus
+        combo_mult = 1.0
+        if combo_count > 0:
+            combo_mult = 1.0 + combo_count * 0.1
+            combo_mult = min(combo_mult, 2.0)  # Cap at 2x
+
+        crit = random.random() < 0.12
+        dmg = max(1, int(base_damage * combo_mult * (0.85 + random.random() * 0.3)))
+        if crit:
+            dmg = int(dmg * 1.8)
+        dmg += bonus_dmg
+
+        target_pet['hp'] = max(0, target_pet['hp'] - dmg)
+
+        if target_pet == enemy_pet:
+            player_damage = dmg
+        else:
+            enemy_damage = dmg
+
+        combo_count += 1
+        state['last_element'] = attack_elem
+
+        log = {
+            'text': f"{attacker_name} 造成 {dmg} 点伤害{'（暴击！）' if crit else ''}{' ' + reaction['desc'] if reaction else ''}",
+            'type': 'player' if target_pet == enemy_pet else 'enemy',
+            'damage': dmg, 'crit': crit,
+            'element': attack_elem,
+            'combo': combo_count if combo_count > 1 else 0,
+            'reaction': reaction['name'] if reaction else None,
+        }
+        return log
+
     if action == 'attack':
         base = player_pet['attack']
         mult = get_multiplier(
             models.PET_TYPES[player_pet['type']]['element'],
             models.PET_TYPES[enemy_pet['type']]['element']
         )
-        crit = random.random() < 0.1
-        dmg = max(1, int((base - enemy_pet['defense'] * 0.5) * mult * (0.85 + random.random() * 0.3)))
-        if crit:
-            dmg = int(dmg * 1.8)
-        enemy_pet['hp'] = max(0, enemy_pet['hp'] - dmg)
-        player_damage = dmg
-        logs.append({
-            'text': f"{player_pet['name']} 发起攻击！造成 {dmg} 点伤害{'（暴击！）' if crit else ''}",
-            'type': 'player', 'damage': dmg, 'crit': crit,
-            'element': models.PET_TYPES[player_pet['type']]['element'],
-        })
+        elem = models.PET_TYPES[player_pet['type']]['element']
+        log = apply_damage(enemy_pet, (base - enemy_pet['defense'] * 0.5) * mult, elem, player_pet['name'])
+        logs.append(log)
 
     elif action == 'special':
         skills = player_pet.get('skills', [])
         if skill_index < len(skills):
             skill = skills[skill_index]
-            if skill.get('heal'):
-                heal = int(player_pet['max_hp'] * 0.3)
-                player_pet['hp'] = min(player_pet['max_hp'], player_pet['hp'] + heal)
-                logs.append({'text': f"{player_pet['name']} 使用了 {skill['name']}！恢复 {heal} HP", 'type': 'heal', 'heal': heal})
+            skill_name = skill['name']
+
+            # Check cooldown
+            cooldowns = state.get('skill_cooldowns', {})
+            cd = cooldowns.get(skill_name, 0)
+            if cd > 0:
+                logs.append({'text': f"{skill_name} 冷却中（还需{cd}回合）", 'type': 'info'})
             else:
-                base = skill['power'] + player_pet['special'] * 0.5
-                mult = get_multiplier(skill['element'], models.PET_TYPES[enemy_pet['type']]['element'])
-                crit = random.random() < 0.12
-                dmg = max(1, int((base - enemy_pet['defense'] * 0.3) * mult * (0.85 + random.random() * 0.3)))
-                if crit:
-                    dmg = int(dmg * 1.8)
-                enemy_pet['hp'] = max(0, enemy_pet['hp'] - dmg)
-                player_damage = dmg
-                logs.append({'text': f"{player_pet['name']} 使用了 {skill['name']}！造成 {dmg} 点伤害{'（暴击！）' if crit else ''}", 'type': 'player', 'damage': dmg, 'crit': crit, 'element': skill['element']})
+                if skill.get('heal'):
+                    heal = int(player_pet['max_hp'] * 0.3)
+                    player_pet['hp'] = min(player_pet['max_hp'], player_pet['hp'] + heal)
+                    combo_count = 0  # Healing resets combo
+                    logs.append({'text': f"{player_pet['name']} 使用了 {skill_name}！恢复 {heal} HP", 'type': 'heal', 'heal': heal})
+                else:
+                    base = skill['power'] + player_pet['special'] * 0.5
+                    mult = get_multiplier(skill['element'], models.PET_TYPES[enemy_pet['type']]['element'])
+                    log = apply_damage(enemy_pet, (base - enemy_pet['defense'] * 0.3) * mult, skill['element'], player_pet['name'])
+                    logs.append(log)
+
+                # Set cooldown (stronger skills = longer cooldown)
+                cd_turns = 1 if skill['power'] < 50 else 2 if skill['power'] < 70 else 3
+                cooldowns[skill_name] = cd_turns
+                state['skill_cooldowns'] = cooldowns
         else:
             logs.append({'text': '没有可使用的技能！', 'type': 'info'})
 
     elif action == 'defend':
         logs.append({'text': f"{player_pet['name']} 进入防御姿态！", 'type': 'defend'})
         state['player_defending'] = True
+        combo_count = 0
+
+    elif action == 'use_item':
+        item_id = data.get('item_id', '')
+        item_info = BATTLE_ITEMS.get(item_id)
+        if item_info:
+            effect = item_info.get('effect', {})
+            if effect.get('heal'):
+                heal = int(player_pet['max_hp'] * effect['heal'])
+                player_pet['hp'] = min(player_pet['max_hp'], player_pet['hp'] + heal)
+                logs.append({'text': f"使用了 {item_info['name']}！恢复 {heal} HP", 'type': 'heal', 'heal': heal})
+            elif effect.get('revive'):
+                if player_pet['hp'] <= 0:
+                    player_pet['hp'] = int(player_pet['max_hp'] * effect['revive'])
+                    logs.append({'text': f"使用了 {item_info['name']}！宠物复活了！", 'type': 'heal', 'heal': player_pet['hp']})
+            elif effect.get('capture'):
+                # Capture mechanic: success depends on enemy HP
+                enemy_pct = enemy_pet['hp'] / enemy_pet['max_hp']
+                capture_chance = (1 - enemy_pct) * 0.6 + 0.1  # 10% at full HP, 70% at 0 HP
+                if enemy_pet['level'] > player_pet['level']:
+                    capture_chance *= 0.5
+                if random.random() < capture_chance:
+                    battle_over = True
+                    player_won = True
+                    # Add wild pet to collection
+                    captured_pet = enemy_pet.copy()
+                    captured_pet['name'] = captured_pet['name'].replace('野生', '')
+                    captured_pet['hp'] = captured_pet['max_hp']
+                    captured_pet.pop('is_wild', None)
+                    captured_pet.pop('id', None)
+                    captured_pet = db.save_pet(captured_pet)
+                    logs.append({'text': f"🎉 成功捕获了 {enemy_pet['name']}！", 'type': 'victory', 'captured': True})
+                    result = {
+                        'success': True, 'logs': logs,
+                        'player_hp': player_pet['hp'], 'player_max_hp': player_pet['max_hp'],
+                        'enemy_hp': 0, 'enemy_max_hp': enemy_pet['max_hp'],
+                        'player_damage': 0, 'enemy_damage': 0,
+                        'battle_over': True, 'player_won': True, 'turn': state['turn'],
+                        'pet': db.get_active_pet(),
+                        'captured_pet': captured_pet,
+                        'reactions': reactions,
+                        'combo_count': combo_count,
+                    }
+                    set_battle_state(None)
+                    return jsonify(result)
+                else:
+                    logs.append({'text': f"捕获失败！{enemy_pet['name']} 挣脱了！", 'type': 'info'})
+            # Consume item from inventory
+            db.use_inventory_item(1, item_id)
+        else:
+            logs.append({'text': '没有这个道具！', 'type': 'info'})
 
     elif action == 'flee':
         if random.random() < 0.6:
@@ -604,13 +770,15 @@ def api_battle_action():
             battle_over = True
         else:
             logs.append({'text': '逃跑失败！', 'type': 'info'})
+            combo_count = 0
 
-    if enemy_pet['hp'] <= 0:
+    if enemy_pet['hp'] <= 0 and not battle_over:
         battle_over = True
         player_won = True
         exp_gain = int(20 + enemy_pet['level'] * 5 + random.randint(0, 10))
         logs.append({'text': f"🎉 胜利！获得 {exp_gain} 经验值！", 'type': 'victory', 'exp': exp_gain})
     elif not battle_over:
+        # Decrement cooldowns for enemy skills
         enemy_skills = enemy_pet.get('skills', [])
         if enemy_skills and random.random() < 0.4:
             skill = random.choice(enemy_skills)
@@ -626,7 +794,10 @@ def api_battle_action():
                     dmg = int(dmg * 0.5)
                 player_pet['hp'] = max(0, player_pet['hp'] - dmg)
                 enemy_damage = dmg
-                logs.append({'text': f"{enemy_pet['name']} 使用了 {skill['name']}！造成 {dmg} 点伤害", 'type': 'enemy', 'damage': dmg, 'element': skill['element']})
+                # Check reaction from enemy element
+                reaction = check_elemental_reaction(skill['element'], models.PET_TYPES[player_pet['type']]['element'])
+                reaction_text = f" {reaction['desc']}" if reaction else ""
+                logs.append({'text': f"{enemy_pet['name']} 使用了 {skill['name']}！造成 {dmg} 点伤害{reaction_text}", 'type': 'enemy', 'damage': dmg, 'element': skill['element']})
         else:
             base = enemy_pet['attack']
             mult = get_multiplier(models.PET_TYPES[enemy_pet['type']]['element'], models.PET_TYPES[player_pet['type']]['element'])
@@ -643,10 +814,18 @@ def api_battle_action():
             exp_gain = int(5 + enemy_pet['level'] * 2)
             logs.append({'text': f"💀 失败了... 获得 {exp_gain} 经验值（安慰奖）", 'type': 'defeat', 'exp': exp_gain})
 
+    # Decrement skill cooldowns
+    cooldowns = state.get('skill_cooldowns', {})
+    new_cooldowns = {}
+    for skill_name, cd in cooldowns.items():
+        if cd > 1:
+            new_cooldowns[skill_name] = cd - 1
+    state['skill_cooldowns'] = new_cooldowns
+
     state['player_defending'] = False
     state['player_pet'] = player_pet
     state['enemy_pet'] = enemy_pet
-    app.config['BATTLE_STATE'] = state
+    state['combo_count'] = combo_count
 
     result = {
         'success': True, 'logs': logs,
@@ -654,6 +833,9 @@ def api_battle_action():
         'enemy_hp': enemy_pet['hp'], 'enemy_max_hp': enemy_pet['max_hp'],
         'player_damage': player_damage, 'enemy_damage': enemy_damage,
         'battle_over': battle_over, 'player_won': player_won, 'turn': state['turn'],
+        'combo_count': combo_count,
+        'reactions': reactions,
+        'skill_cooldowns': {k: v for k, v in state.get('skill_cooldowns', {}).items()},
     }
 
     if battle_over:
@@ -668,7 +850,9 @@ def api_battle_action():
         result['leveled_up'] = level_up_info['leveled_up']
         result['new_achievements'] = check_achievements()
 
-        app.config['BATTLE_STATE'] = None
+        set_battle_state(None)
+    else:
+        set_battle_state(state)
 
     return jsonify(result)
 
@@ -782,6 +966,26 @@ def api_use_item():
     })
 
 
+# ---- Get inventory for battle ----
+@app.route('/api/battle_items')
+def api_battle_items():
+    """Get items available for use in battle."""
+    inventory = db.get_inventory()
+    battle_usable = []
+    for inv in inventory:
+        item_id = inv['item_id']
+        if item_id in BATTLE_ITEMS or item_id in ('potion', 'elixir', 'revive', 'capture'):
+            bi = BATTLE_ITEMS.get(item_id, {})
+            battle_usable.append({
+                'item_id': item_id,
+                'name': bi.get('name', item_id),
+                'icon': bi.get('icon', '📦'),
+                'desc': bi.get('desc', ''),
+                'count': inv.get('count', 1),
+            })
+    return jsonify({'items': battle_usable})
+
+
 # ---- Ranking ----
 
 @app.route('/api/ranking')
@@ -827,6 +1031,7 @@ def api_create_pet():
 @app.route('/api/reset', methods=['POST'])
 def api_reset():
     db.reset_game()
+    BATTLE_STATES.clear()
     return jsonify({'success': True})
 
 

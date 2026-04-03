@@ -1,5 +1,7 @@
 /* ============================================
-   Battle System Module
+   Battle System Module - Enhanced
+   Like 小冰冰传奇 (Hero Charge)
+   Cooldowns, Items, Capture, Combos, Speed
    ============================================ */
 
 const Battle = {
@@ -14,6 +16,9 @@ const Battle = {
     isActive: false,
     animationFrameId: null,
     turnLocked: false,
+    battleSpeed: 1,
+    skillCooldowns: {},
+    comboCount: 0,
 
     init(playerPet, enemyPet, mode = 'pve') {
         this.playerPet = playerPet;
@@ -21,18 +26,37 @@ const Battle = {
         this.mode = mode;
         this.isActive = true;
         this.turnLocked = false;
+        this.battleSpeed = 1;
+        this.skillCooldowns = {};
+        this.comboCount = 0;
 
         this.initBattleScene();
         this.updateBattleUI();
         this.addBattleLog(`⚔️ 战斗开始！${playerPet.name} vs ${enemyPet.name}`, 'start');
         this.setTurnState(true);
+        this.bindBattleEvents();
+    },
+
+    bindBattleEvents() {
+        // Speed buttons
+        document.querySelectorAll('.speed-btn').forEach(btn => {
+            btn.onclick = () => {
+                this.battleSpeed = parseInt(btn.dataset.speed) || 1;
+                document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+            };
+        });
+
+        // Battle item button
+        document.getElementById('btn-battle-item')?.addEventListener('click', () => this.showItemSelect());
+        // Capture button
+        document.getElementById('btn-capture')?.addEventListener('click', () => this.playerAction('use_item', 0, 'capture'));
     },
 
     initBattleScene() {
         const canvas = document.getElementById('battle-canvas');
         if (!canvas) return;
 
-        // Clean up existing
         if (this.battleRenderer) {
             this.battleRenderer.dispose();
         }
@@ -47,7 +71,6 @@ const Battle = {
         this.battleRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         this.battleRenderer.toneMapping = THREE.ACESFilmicToneMapping;
 
-        // Background gradient
         this.battleScene.background = new THREE.Color(0x1a1a2e);
 
         // Lighting
@@ -65,11 +88,8 @@ const Battle = {
         // Arena floor
         const arenaGeo = new THREE.CircleGeometry(4, 32);
         const arenaMat = new THREE.MeshStandardMaterial({
-            color: 0x2d3436,
-            metalness: 0.5,
-            roughness: 0.3,
-            transparent: true,
-            opacity: 0.7,
+            color: 0x2d3436, metalness: 0.5, roughness: 0.3,
+            transparent: true, opacity: 0.7,
         });
         const arena = new THREE.Mesh(arenaGeo, arenaMat);
         arena.rotation.x = -Math.PI / 2;
@@ -99,36 +119,27 @@ const Battle = {
         if (this.enemyPet) {
             this.enemyModel = Pets3D.createPet(this.battleScene, this.enemyPet.type, this.enemyPet);
             this.enemyModel.group.position.set(2, 0, 0.5);
-            this.enemyModel.group.rotation.y = Math.PI; // Face player
+            this.enemyModel.group.rotation.y = Math.PI;
         }
 
-        // Particle effects
         Effects.createAmbientParticles(this.battleScene, this.playerPet?.type || 'default');
-
         this.animateBattle();
     },
 
     animateBattle() {
         if (!this.battleScene || !this.battleRenderer) return;
-
         const animate = (time) => {
             this.animationFrameId = requestAnimationFrame(animate);
-
             if (this.playerModel) this.playerModel.animate(time);
             if (this.enemyModel) this.enemyModel.animate(time);
-
-            // Animate particles
             this.battleScene.children.forEach(child => {
                 if (child.userData.animate) child.userData.animate(time);
             });
-
             Effects.updateFloatingTexts();
             Effects.updateParticles();
             Effects.applyShake(this.battleCamera);
-
             this.battleRenderer.render(this.battleScene, this.battleCamera);
         };
-
         this.animationFrameId = requestAnimationFrame(animate);
     },
 
@@ -145,13 +156,15 @@ const Battle = {
         this.battleScene = null;
         this.playerModel = null;
         this.enemyModel = null;
+        // Clear log
+        const log = document.getElementById('battle-log');
+        if (log) log.innerHTML = '';
     },
 
     updateBattleUI() {
-        // Player info
         const petEmojis = {
-            dragon: '🐉', fox: '🦊', bear: '🐻',
-            rabbit: '🐰', cat: '🐱', angel: '👼'
+            dragon: '🐉', fox: '🦊', bear: '🐻', rabbit: '🐰', cat: '🐱', angel: '👼',
+            phoenix: '🔥', krystal: '🐬', tiger: '🐯', sprite: '🌿', wolf: '🐺', unicorn: '🦄'
         };
 
         const playerInfo = document.querySelector('.battle-pet-info:not(.enemy)');
@@ -161,7 +174,6 @@ const Battle = {
             playerInfo.querySelector('.battle-level').textContent = `Lv.${this.playerPet.level}`;
         }
 
-        // Enemy info
         const enemyInfo = document.querySelector('.battle-pet-info.enemy');
         if (enemyInfo && this.enemyPet) {
             enemyInfo.querySelector('div[style]').textContent = petEmojis[this.enemyPet.type] || '🐾';
@@ -182,6 +194,7 @@ const Battle = {
         const enemyBar = document.getElementById('enemy-hp-bar');
         const playerText = document.getElementById('player-hp-text');
         const enemyText = document.getElementById('enemy-hp-text');
+        const enemyPctEl = document.getElementById('enemy-hp-pct');
 
         if (playerBar) {
             playerBar.style.width = playerPct + '%';
@@ -191,9 +204,10 @@ const Battle = {
 
         if (enemyBar) {
             enemyBar.style.width = enemyPct + '%';
-            enemyBar.className = 'battle-hp-bar' + (enemyPct < 30 ? ' danger' : enemyPct < 60 ? ' warning' : '');
+            enemyBar.className = 'battle-hp-bar enemy-hp' + (enemyPct < 30 ? ' danger' : enemyPct < 60 ? ' warning' : '');
         }
         if (enemyText) enemyText.textContent = `${this.enemyPet.hp}/${this.enemyPet.max_hp}`;
+        if (enemyPctEl) enemyPctEl.textContent = `${Math.round(enemyPct)}%`;
     },
 
     setTurnState(isPlayerTurn) {
@@ -218,27 +232,37 @@ const Battle = {
 
         const entry = document.createElement('div');
         entry.className = `battle-log-entry ${type}`;
-        entry.textContent = text;
+
+        // Add icons for log types
+        const icons = {
+            player: '⚔️', enemy: '💀', heal: '💚', enemy_heal: '💚',
+            defend: '🛡️', flee: '🏃', victory: '🎉', defeat: '😵',
+            start: '📢', info: 'ℹ️', reaction: '⚡', capture: '🔮'
+        };
+
+        const icon = icons[type] || 'ℹ️';
+        entry.innerHTML = `<span class="log-icon">${icon}</span> ${text}`;
         container.appendChild(entry);
         container.scrollTop = container.scrollHeight;
 
-        // Auto-fade old entries
-        if (container.children.length > 10) {
+        if (container.children.length > 15) {
             container.children[0]?.remove();
         }
     },
 
-    async playerAction(action, skillIndex = 0) {
+    async playerAction(action, skillIndex = 0, itemId = '') {
         if (!this.isActive || this.turnLocked) return;
 
         this.turnLocked = true;
         this.setTurnState(false);
 
+        const speed = this.battleSpeed;
+
         try {
             const res = await App.api('/api/battle_action', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action, skill_index: skillIndex }),
+                body: JSON.stringify({ action, skill_index: skillIndex, item_id: itemId }),
             });
 
             if (!res.success) {
@@ -247,14 +271,31 @@ const Battle = {
                 return;
             }
 
+            // Update cooldowns from server
+            if (res.skill_cooldowns) {
+                this.skillCooldowns = res.skill_cooldowns;
+            }
+
+            // Show combo
+            if (res.combo_count && res.combo_count > 1) {
+                Effects.showCombo(res.combo_count);
+                this.comboCount = res.combo_count;
+            }
+
+            // Show reactions
+            if (res.reactions && res.reactions.length > 0) {
+                for (const r of res.reactions) {
+                    Effects.showReactionEffect(r.name);
+                }
+            }
+
             // Process logs
+            const delay = 300 / speed;
             for (const log of res.logs) {
                 this.addBattleLog(log.text, log.type);
 
-                // Visual effects
                 if (log.type === 'player' && log.damage) {
-                    // Player attacks enemy
-                    if (this.playerModel) this.playerModel.playAnimation('attack', 600);
+                    if (this.playerModel) this.playerModel.playAnimation('attack', 600 / speed);
                     setTimeout(() => {
                         Effects.shake(log.crit ? 12 : 6);
                         if (this.enemyModel) {
@@ -279,12 +320,20 @@ const Battle = {
                                     '#ff7675'
                                 );
                             }
+                            // Element effect
+                            if (log.element && log.element !== 'normal') {
+                                Effects.createElementEffect(
+                                    this.battleScene,
+                                    this.enemyModel.group.position,
+                                    log.element,
+                                    log.damage > 50
+                                );
+                            }
                         }
-                    }, 300);
+                    }, delay);
                 }
 
                 if (log.type === 'enemy' && log.damage) {
-                    // Enemy attacks player
                     setTimeout(() => {
                         Effects.shake(5);
                         if (this.playerModel) {
@@ -300,7 +349,7 @@ const Battle = {
                                 '#ff7675'
                             );
                         }
-                    }, 500);
+                    }, delay * 1.5);
                 }
 
                 if (log.type === 'heal' || log.type === 'enemy_heal') {
@@ -318,7 +367,7 @@ const Battle = {
 
                 if (log.type === 'defend') {
                     if (this.playerModel) {
-                        Effects.createSparkles(this.playerScene || this.battleScene, this.playerModel.group.position, '#74b9ff', 10);
+                        Effects.createSparkles(this.battleScene, this.playerModel.group.position, '#74b9ff', 10);
                     }
                 }
             }
@@ -334,10 +383,10 @@ const Battle = {
                 return;
             }
 
-            // Enemy turn animation, then unlock
+            // Enemy turn
             setTimeout(() => {
                 this.setTurnState(true);
-            }, 800);
+            }, 800 / speed);
 
         } catch (e) {
             console.error('Battle action error:', e);
@@ -346,11 +395,52 @@ const Battle = {
         }
     },
 
+    showItemSelect() {
+        // Quick item selection - use battle items from inventory
+        App.api('/api/battle_items').then(data => {
+            const items = data.items || [];
+            if (items.length === 0) {
+                App.showToast('没有可用的战斗道具', 'info');
+                return;
+            }
+
+            const modal = document.getElementById('modal-overlay');
+            const title = document.getElementById('modal-title');
+            const body = document.getElementById('modal-body');
+            if (!modal || !title || !body) return;
+
+            title.textContent = '选择道具';
+            let html = '<div style="display:flex;flex-direction:column;gap:8px;">';
+            items.forEach(item => {
+                html += `<button class="battle-btn item-btn" 
+                    onclick="Battle.playerAction('use_item', 0, '${item.item_id}'); document.getElementById('modal-overlay').classList.remove('active');"
+                    style="width:100%;text-align:left;padding:10px 15px;display:flex;align-items:center;gap:10px;">
+                    <span style="font-size:1.5rem;">${item.icon}</span>
+                    <div>
+                        <div style="font-weight:700;">${item.name} ${item.count > 1 ? '×' + item.count : ''}</div>
+                        <div style="font-size:0.8rem;color:rgba(255,255,255,0.6);">${item.desc}</div>
+                    </div>
+                </button>`;
+            });
+            // Also offer potion and capture from default items
+            html += `<button class="battle-btn item-btn" 
+                onclick="Battle.playerAction('use_item', 0, 'capture'); document.getElementById('modal-overlay').classList.remove('active');"
+                style="width:100%;text-align:left;padding:10px 15px;display:flex;align-items:center;gap:10px;">
+                <span style="font-size:1.5rem;">🔮</span>
+                <div><div style="font-weight:700;">宠物球</div><div style="font-size:0.8rem;color:rgba(255,255,255,0.6);">尝试捕捉野生宠物</div></div>
+            </button>`;
+            html += '</div>';
+            body.innerHTML = html;
+            modal.classList.add('active');
+        });
+    },
+
     async showBattleResult(result) {
         const overlay = document.getElementById('battle-result');
         const icon = document.getElementById('result-icon');
         const text = document.getElementById('result-text');
         const rewards = document.getElementById('result-rewards');
+        const extra = document.getElementById('result-extra');
         const closeBtn = document.getElementById('result-close');
 
         if (!overlay) return;
@@ -378,7 +468,16 @@ const Battle = {
         }
         rewards.textContent = rewardText;
 
-        // Show new achievements
+        // Show captured pet
+        if (extra) {
+            if (result.captured_pet) {
+                extra.innerHTML = `🔮 成功捕获了 <strong>${result.captured_pet.name}</strong>！`;
+                extra.style.display = 'block';
+            } else {
+                extra.style.display = 'none';
+            }
+        }
+
         if (result.new_achievements?.length > 0) {
             result.new_achievements.forEach((ach, i) => {
                 setTimeout(() => App.showAchievement(ach.name, ach.icon), 1000 + i * 1500);
@@ -387,7 +486,6 @@ const Battle = {
 
         overlay.classList.add('active');
 
-        // Update game state
         if (result.pet) {
             App.gameState.pet = result.pet;
             App.updateUI();
@@ -403,7 +501,6 @@ const Battle = {
         });
     },
 
-    // Skill selection popup
     showSkillSelect() {
         if (!this.playerPet?.skills?.length) {
             App.showToast('没有可用的技能', 'info');
@@ -419,17 +516,24 @@ const Battle = {
 
         title.textContent = '选择技能';
 
+        const elemEmoji = {
+            fire: '🔥', ice: '❄️', electric: '⚡',
+            nature: '🌿', dark: '🌑', light: '✨'
+        };
+
         let html = '<div style="display:flex;flex-direction:column;gap:8px;">';
         skills.forEach((skill, i) => {
-            const elemEmoji = {
-                fire: '🔥', ice: '❄️', electric: '⚡',
-                nature: '🌿', dark: '🌑', light: '✨'
-            };
+            const cd = this.skillCooldowns[skill.name] || 0;
+            const disabled = cd > 0;
+            const cdText = disabled ? ` (冷却${cd}回合)` : '';
+            const opacityStyle = disabled ? 'opacity:0.4;cursor:not-allowed;' : '';
+
             html += `<button class="battle-btn ${skill.element || 'attack'}" 
-                onclick="Battle.playerAction('special', ${i}); document.getElementById('modal-overlay').classList.remove('active');"
-                style="width:100%;text-align:left;padding:10px 15px;">
+                ${disabled ? 'disabled' : ''}
+                onclick="${disabled ? '' : `Battle.playerAction('special', ${i}); document.getElementById('modal-overlay').classList.remove('active');`}"
+                style="width:100%;text-align:left;padding:10px 15px;${opacityStyle}">
                 ${elemEmoji[skill.element] || '💫'} ${skill.name} 
-                ${skill.heal ? '(回复)' : `(${skill.power}威力)`}
+                ${skill.heal ? '(回复)' : `(${skill.power}威力)`}${cdText}
             </button>`;
         });
         html += '</div>';
@@ -439,10 +543,19 @@ const Battle = {
     }
 };
 
-// Bind battle action buttons
+// Bind battle action buttons using event delegation
 document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('btn-attack')?.addEventListener('click', () => Battle.playerAction('attack'));
-    document.getElementById('btn-defend')?.addEventListener('click', () => Battle.playerAction('defend'));
-    document.getElementById('btn-special')?.addEventListener('click', () => Battle.showSkillSelect());
-    document.getElementById('btn-flee')?.addEventListener('click', () => Battle.playerAction('flee'));
+    // Use event delegation on battle-actions container
+    const battleActions = document.getElementById('battle-actions');
+    if (battleActions) {
+        battleActions.addEventListener('click', (e) => {
+            const btn = e.target.closest('.battle-btn');
+            if (!btn) return;
+            if (btn.id === 'btn-attack') Battle.playerAction('attack');
+            else if (btn.id === 'btn-defend') Battle.playerAction('defend');
+            else if (btn.id === 'btn-special') Battle.showSkillSelect();
+            else if (btn.id === 'btn-flee') Battle.playerAction('flee');
+            // btn-battle-item and btn-capture handled by their own listeners in bindBattleEvents
+        });
+    }
 });

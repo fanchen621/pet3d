@@ -3,15 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>宠物大冒险 - 班级优化大师伴侣</title>
+    <title>宠物大冒险 - 精灵宝贝</title>
     <link rel="stylesheet" href="/static/css/style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
     <!-- Loading Screen -->
     <div id="loading-screen" class="loading-screen">
-        <div class="loading-spinner"></div>
-        <div class="loading-text">正在加载宠物大冒险...</div>
+        <div class="loading-orb">
+            <div class="loading-orb-inner"></div>
+            <div class="loading-orb-ring"></div>
+            <div class="loading-orb-ring ring2"></div>
+        </div>
+        <div class="loading-text">✨ 正在召唤星光精灵...</div>
     </div>
 
     <!-- Toast Container -->
@@ -47,14 +51,46 @@
         <div class="battle-result-icon" id="result-icon">🎉</div>
         <div class="battle-result-text" id="result-text">胜利!</div>
         <div class="battle-result-rewards" id="result-rewards">+50 经验</div>
+        <div class="battle-result-extra" id="result-extra"></div>
         <button class="battle-result-btn" id="result-close">继续</button>
     </div>
 
-    <!-- ===== PET SELECT (First Time) ===== -->
-    <div id="pet-select-screen" class="screen">
+    <!-- Combo Counter Display -->
+    <div id="combo-display" class="combo-display">
+        <span class="combo-count" id="combo-count">0</span>
+        <span class="combo-label">连击!</span>
+    </div>
+
+    <!-- ===== SPIRIT ASSISTANT INTRO ===== -->
+    <div id="spirit-intro-screen" class="screen">
+        <canvas id="spirit-particles" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:0;"></canvas>
+        <div class="spirit-container">
+            <div class="spirit-orb-wrapper">
+                <div class="spirit-orb" id="spirit-orb">
+                    <div class="spirit-glow"></div>
+                    <div class="spirit-core">⭐</div>
+                    <div class="spirit-ring"></div>
+                    <div class="spirit-ring ring2"></div>
+                </div>
+                <div class="spirit-name">星光精灵</div>
+            </div>
+            <div class="spirit-dialogue-box" id="spirit-dialogue">
+                <div class="dialogue-speaker">星光精灵</div>
+                <div class="dialogue-text" id="dialogue-text"></div>
+                <div class="dialogue-indicator">▼</div>
+            </div>
+            <button class="spirit-next-btn" id="spirit-next" style="display:none;">继续 ▶</button>
+        </div>
+    </div>
+
+    <!-- ===== SPIRIT PET SELECT ===== -->
+    <div id="spirit-pet-select" class="screen">
         <div style="position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;padding:20px;overflow-y:auto;">
-            <div class="game-title" style="font-size:2rem;margin-bottom:5px;">选择你的伙伴</div>
-            <div class="game-subtitle" style="margin-bottom:20px;">每只宠物都有独特的属性和技能</div>
+            <div class="spirit-select-intro">
+                <span style="font-size:2rem;">⭐</span>
+                <div class="spirit-select-title">选择你的第一个伙伴吧！</div>
+                <div class="spirit-select-sub">每只宠物都有独特的属性和技能，选择最适合你的伙伴</div>
+            </div>
             <div class="pet-select-grid" id="pet-select-grid"></div>
         </div>
     </div>
@@ -72,7 +108,7 @@
         </div>
 
         <div style="position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;">
-            <div class="game-title">宠物大冒险</div>
+            <div class="game-title">精灵宝贝</div>
             <div class="game-subtitle">班级优化大师 · 伴侣应用</div>
             
             <div class="menu-buttons">
@@ -97,7 +133,6 @@
             </div>
         </div>
 
-        <!-- Stats Bar -->
         <div class="classroom-stats" id="classroom-stats">
             <div class="stat-card">
                 <div class="stat-value" id="stat-students">0</div>
@@ -117,7 +152,6 @@
             </div>
         </div>
 
-        <!-- Student Grid -->
         <div class="classroom-content">
             <div class="student-grid" id="student-grid">
                 <div class="empty-classroom">
@@ -178,7 +212,6 @@
                 <button class="modal-close-btn" id="student-modal-close">✕</button>
             </div>
 
-            <!-- Points Section -->
             <div class="student-points-section">
                 <div class="points-display">
                     <div class="points-value" id="student-points-value">0</div>
@@ -202,7 +235,6 @@
                 </div>
             </div>
 
-            <!-- Pet Section -->
             <div class="student-pet-section" id="student-pet-section">
                 <div class="pet-section-title">🐾 领养宠物</div>
                 <div id="student-pet-display">
@@ -211,7 +243,6 @@
                 </div>
             </div>
 
-            <!-- Point Logs -->
             <div class="point-logs-section">
                 <div class="logs-title">📊 积分记录</div>
                 <div class="point-logs-list" id="point-logs-list"></div>
@@ -234,14 +265,17 @@
                 <div class="stat-item">
                     <span class="stat-icon">❤️</span>
                     <div class="stat-bar-container"><div class="stat-bar hp" style="width:100%"></div></div>
+                    <span class="stat-value-text hp-text"></span>
                 </div>
                 <div class="stat-item">
                     <span class="stat-icon">⭐</span>
                     <div class="stat-bar-container"><div class="stat-bar exp" style="width:30%"></div></div>
+                    <span class="stat-value-text exp-text"></span>
                 </div>
                 <div class="stat-item">
                     <span class="stat-icon">😊</span>
                     <div class="stat-bar-container"><div class="stat-bar mood" style="width:80%"></div></div>
+                    <span class="stat-value-text mood-text"></span>
                 </div>
             </div>
             <div class="header-actions">
@@ -251,7 +285,12 @@
 
         <div class="pet-3d-canvas">
             <canvas id="pet-canvas"></canvas>
-            <div class="pet-interaction-hint">👆 点击宠物互动</div>
+            <!-- Pet speech bubble -->
+            <div class="pet-speech-bubble" id="pet-speech-bubble" style="display:none;">
+                <div class="speech-text" id="speech-text"></div>
+                <div class="speech-tail"></div>
+            </div>
+            <div class="pet-interaction-hint">👆 点击宠物互动 · 拖拽抚摸</div>
         </div>
 
         <div class="pet-action-bar">
@@ -276,15 +315,20 @@
                     <div class="battle-hp-text" id="player-hp-text">100/100</div>
                 </div>
             </div>
+            <div class="battle-speed-control">
+                <button class="speed-btn active" data-speed="1">1x</button>
+                <button class="speed-btn" data-speed="2">2x</button>
+            </div>
             <div class="battle-pet-info enemy">
                 <div style="font-size:2rem;">🦊</div>
                 <div class="battle-pet-hp">
                     <div class="battle-pet-name">野生宠物</div>
                     <div class="battle-level">Lv.1</div>
                     <div class="battle-hp-bar-outer">
-                        <div class="battle-hp-bar" id="enemy-hp-bar" style="width:100%"></div>
+                        <div class="battle-hp-bar enemy-hp" id="enemy-hp-bar" style="width:100%"></div>
                     </div>
                     <div class="battle-hp-text" id="enemy-hp-text">80/80</div>
+                    <div class="enemy-hp-pct" id="enemy-hp-pct">100%</div>
                 </div>
             </div>
         </div>
@@ -299,6 +343,8 @@
             <button class="battle-btn attack" id="btn-attack">⚔️ 攻击</button>
             <button class="battle-btn defend" id="btn-defend">🛡️ 防御</button>
             <button class="battle-btn special" id="btn-special">✨ 特技</button>
+            <button class="battle-btn item-btn" id="btn-battle-item">🧪 道具</button>
+            <button class="battle-btn capture-btn" id="btn-capture">🔮 捕捉</button>
             <button class="battle-btn flee" id="btn-flee">🏃 逃跑</button>
         </div>
 
