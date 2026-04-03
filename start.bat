@@ -1,53 +1,45 @@
 @echo off
 chcp 65001 >nul 2>&1
-title Pet Adventure - Launcher
+title 精灵宝贝 - 启动器
 
 echo ============================================
-echo     Pet Adventure - Launcher
-echo     Ban Ji You Hua Da Shi Companion
+echo     精灵宝贝 - Pet Adventure
 echo ============================================
 echo.
 
 :: Check Python
 python --version >nul 2>&1
 if errorlevel 1 (
-    echo [ERROR] Python not found!
-    echo Please install Python 3.8+ from: https://www.python.org/downloads/
-    echo Check "Add Python to PATH" during install.
+    echo [错误] 未找到Python！
+    echo 请安装 Python 3.8+: https://www.python.org/downloads/
+    echo 安装时勾选 "Add Python to PATH"
     pause
     exit /b 1
 )
 
-:: Show Python version
 python --version
 
-:: Install Flask
+:: Install dependencies
 echo.
-echo [1/2] Installing dependencies...
-python -m pip install flask --quiet --disable-pip-version-check
+echo [1/2] 安装依赖...
+python -m pip install flask openpyxl --quiet --disable-pip-version-check
 if errorlevel 1 (
-    echo Retrying with --user flag...
-    python -m pip install flask --user --quiet --disable-pip-version-check
+    echo 重试中...
+    python -m pip install flask openpyxl --user --quiet --disable-pip-version-check
 )
-if errorlevel 1 (
-    echo [ERROR] Failed to install Flask. Try manually:
-    echo   python -m pip install flask
-    pause
-    exit /b 1
-)
-echo Done!
+echo 完成！
 
 :: Launch
 echo.
-echo [2/2] Starting game...
+echo [2/2] 启动游戏...
 echo.
-echo Game URL: http://127.0.0.1:5555
-echo Browser will open automatically.
-echo Close this window to stop the game.
+echo 游戏地址: http://127.0.0.1:5555
+echo 浏览器将自动打开
+echo 关闭此窗口即可停止游戏
 echo.
 
 python main.py
 
 echo.
-echo Game stopped.
+echo 游戏已停止。
 pause
