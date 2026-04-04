@@ -500,6 +500,14 @@ const App = {
             document.querySelectorAll('.hp-text').forEach(el => el.textContent = `${pet.hp}/${pet.max_hp}`);
             document.querySelectorAll('.exp-text').forEach(el => el.textContent = `${pet.exp || 0}/${pet.exp_to_next || 50}`);
             document.querySelectorAll('.mood-text').forEach(el => el.textContent = `${pet.mood || 100}%`);
+
+            // Update combat stats display
+            document.querySelectorAll('.stat-atk').forEach(el => el.textContent = pet.attack || 0);
+            document.querySelectorAll('.stat-def').forEach(el => el.textContent = pet.defense || 0);
+            document.querySelectorAll('.stat-spd').forEach(el => el.textContent = pet.speed || 0);
+            document.querySelectorAll('.stat-spc').forEach(el => el.textContent = pet.special || 0);
+            document.querySelectorAll('.stat-cp').forEach(el => el.textContent = pet.combat_power || 0);
+            document.querySelectorAll('.pet-level').forEach(el => el.textContent = `Lv.${pet.level || 1}`);
         }
 
         const shopPoints = document.getElementById('shop-points');

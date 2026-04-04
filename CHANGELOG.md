@@ -167,6 +167,29 @@ AttributeError: 'NoneType' object has no attribute 'secret_key'
 - **`app.py`** — Excel导入移除.xls支持；战斗初始化添加防御性检查
 - **`CHANGELOG.md`** — 记录本次修复
 
+## v2.0.4 — 2026-04-04 修复学生显示/宠物属性/Excel导入
+
+### 修复的问题
+- **学生卡片无头像无姓名**
+  - 学生卡片添加性别头像（🧑/👧）
+  - 姓名为空时显示"未命名学生"占位文字
+  - Excel导入强制初始积分为0
+  - 改进Excel表头识别，支持"班优评语表"格式（扩展关键词匹配）
+  - 移除.xls支持（openpyxl不兼容），前端同步更新
+- **互动页面属性显示为0**
+  - pet-home页面添加战斗属性展示（ATK/DEF/SPD/Special/CP）
+  - updateUI()中补充属性数值更新逻辑
+- **Excel导入改进**
+  - 表头扫描行数从10行扩展到15行
+  - 支持更多列名格式：座号、评语积分、总分、学生姓名等
+
+### 修改的文件
+- **`app.py`** — Excel导入积分强制为0，表头识别增强
+- **`templates/index.html`** — 宠物页添加属性显示区域，导入弹窗移除.xls
+- **`static/js/app.js`** — updateUI补充属性数值更新
+- **`static/js/classroom.js`** — 学生卡片添加头像，上传校验移除.xls
+- **`static/css/style.css`** — 添加头像和属性样式
+
 ## 下次更新备忘
 
 ### 已知可优化

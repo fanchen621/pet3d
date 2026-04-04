@@ -300,9 +300,9 @@ def api_import_excel():
         students = []
         # Try to detect header row
         header_row = None
-        for row_idx, row in enumerate(ws.iter_rows(max_row=10, values_only=True), 1):
+        for row_idx, row in enumerate(ws.iter_rows(max_row=15, values_only=True), 1):
             row_str = ' '.join(str(c or '').lower() for c in row)
-            if '姓名' in row_str or 'name' in row_str or '学生' in row_str:
+            if any(k in row_str for k in ['姓名', 'name', '学生', '名字', '编号', '序号', '学号']):
                 header_row = row_idx
                 headers = [str(c or '').strip().lower() for c in row]
                 break
@@ -319,16 +319,17 @@ def api_import_excel():
         points_col = None
 
         for i, h in enumerate(headers):
-            if '姓名' in h or '名字' in h or 'name' in h:
+            h_clean = h.strip()
+            if any(k in h_clean for k in ['姓名', '名字', '学生姓名', '学生名', 'name', '学生']):
                 name_col = i
-            elif '学号' in h or '编号' in h or '序号' in h or 'no' in h or 'number' in h:
+            elif any(k in h_clean for k in ['学号', '编号', '序号', 'no', 'number', '座号', '座位']):
                 no_col = i
-            elif '性别' in h or 'gender' in h or 'sex' in h:
+            elif any(k in h_clean for k in ['性别', 'gender', 'sex']):
                 gender_col = i
-            elif '积分' in h or '分数' in h or 'point' in h or 'score' in h:
+            elif any(k in h_clean for k in ['积分', '分数', 'point', 'score', '评语积分', '总分']):
                 points_col = i
 
-        # Default: if only 1 column, treat as name list
+        # Default: if no name column found, try the first column that has text values
         if name_col is None:
             name_col = 0
 
@@ -353,7 +354,7 @@ def api_import_excel():
                 'name': name,
                 'student_no': student_no,
                 'gender': gender,
-                'points': points,
+                'points': 0,  # 强制初始积分为0
             })
 
         if not students:

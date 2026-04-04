@@ -103,12 +103,15 @@ const Classroom = {
             const moodEmoji = student.current_points > 50 ? '😊' : student.current_points > 20 ? '😐' : '😢';
 
             card.innerHTML = `
+                <div class="student-card-avatar">
+                    <span class="student-avatar-emoji">${student.gender === '女' ? '👧' : '🧑'}</span>
+                </div>
                 <div class="student-card-pet ${hasPet ? '' : 'no-pet'}" style="${hasPet ? `background: radial-gradient(ellipse at center, ${elementColor}22, transparent)` : ''}">
                     <div class="pet-emoji-display">${hasPet ? petEmoji : '❓'}</div>
                     ${hasPet ? `<div class="pet-mini-info">Lv.${student.pet_level || 1}</div>` : ''}
                 </div>
                 <div class="student-card-info">
-                    <div class="student-card-name">${student.name}</div>
+                    <div class="student-card-name">${student.name || '未命名学生'}</div>
                     <div class="student-card-meta">
                         <span class="student-points-badge">⭐ ${student.current_points}</span>
                         <span class="student-mood">${moodEmoji}</span>
@@ -167,8 +170,8 @@ const Classroom = {
             'text/csv',
         ];
         const ext = file.name.split('.').pop().toLowerCase();
-        if (!['xlsx', 'xls', 'csv'].includes(ext)) {
-            App.showToast('仅支持 .xlsx / .xls / .csv 文件', 'error');
+        if (!['xlsx', 'csv'].includes(ext)) {
+            App.showToast('仅支持 .xlsx 和 .csv 文件（.xls 请先另存为 .xlsx）', 'error');
             return;
         }
 

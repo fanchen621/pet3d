@@ -1389,6 +1389,7 @@ body {
 
 .student-card {
     display: flex;
+    align-items: center;
     background: var(--glass-bg);
     border: 1px solid var(--glass-border);
     border-radius: 18px;
@@ -1397,6 +1398,23 @@ body {
     transition: all 0.3s ease;
     animation: cardFadeIn 0.4s ease forwards;
     opacity: 0;
+    gap: 12px;
+}
+
+.student-card-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, rgba(108,92,231,0.3), rgba(253,121,168,0.2));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border: 2px solid rgba(255,255,255,0.15);
+}
+
+.student-avatar-emoji {
+    font-size: 1.6rem;
 }
 
 @keyframes cardFadeIn {
@@ -2166,6 +2184,29 @@ body {
     color: rgba(255,255,255,0.6);
     min-width: 55px;
     text-align: right;
+}
+
+/* ===== COMBAT STATS ===== */
+.pet-combat-stats {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    margin-top: 6px;
+    padding: 6px 0;
+}
+
+.combat-stat {
+    font-size: 0.8rem;
+    color: rgba(255,255,255,0.8);
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    font-weight: 600;
+}
+
+.combat-stat span {
+    font-weight: 700;
+    color: #fff;
 }
 
 /* ===== COMBO DISPLAY ===== */
