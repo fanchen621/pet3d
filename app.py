@@ -290,8 +290,8 @@ def api_import_excel():
         return jsonify({'success': False, 'message': '未选择文件'})
 
     filename = file.filename.lower()
-    if not (filename.endswith('.xlsx') or filename.endswith('.xls') or filename.endswith('.csv')):
-        return jsonify({'success': False, 'message': '仅支持 .xlsx/.xls/.csv 文件'})
+    if not (filename.endswith('.xlsx') or filename.endswith('.csv')):
+        return jsonify({'success': False, 'message': '仅支持 .xlsx 和 .csv 文件（.xls 格式请先用Excel另存为 .xlsx）'})
 
     try:
         wb = openpyxl.load_workbook(io.BytesIO(file.read()), data_only=True)
@@ -563,20 +563,49 @@ def api_add_mood():
 
 @app.route('/api/start_battle', methods=['POST'])
 def api_start_battle():
-    data = request.json
+    data = request.json or {}
     mode = data.get('mode', 'pve')
 
     pet = db.get_active_pet()
     if not pet:
-        return jsonify({'success': False, 'message': '你还没有宠物，先去选择一只吧！'})
+        # Try to get any pet or create one
+        all_pets = db.get_all_pets()
+        if all_pets:
+            pet = all_pets[0]
+            db.set_active_pet(pet['id'])
+        else:
+            return jsonify({'success': False, 'message': '你还没有宠物，先去选择一只吧！'})
 
-    player = db.get_player()
-    enemy = models.create_wild_pet(pet['level'])
+    # Ensure pet has required fields
+    if pet.get('type') not in models.PET_TYPES:
+        return jsonify({'success': False, 'message': '宠物数据异常，请重新选择宠物'})
+
+    if pet.get('hp', 0) <= 0:
+        pet['hp'] = pet.get('max_hp', 100)
+        db.save_pet(pet)
+
+    player_level = pet.get('level', 1)
+    enemy = models.create_wild_pet(player_level)
+
+    # Ensure enemy has required fields
+    if not enemy.get('type') or enemy['type'] not in models.PET_TYPES:
+        enemy['type'] = 'dragon'
+        enemy['name'] = '野生龙宝宝'
 
     # Ensure enemy has skills
     if not enemy.get('skills'):
         template = models.PET_TYPES.get(enemy['type'], {})
         enemy['skills'] = [s for s in template.get('skills', []) if s.get('unlock_level', 1) <= enemy.get('level', 1)]
+
+    # Ensure enemy stats are valid
+    for stat in ('hp', 'max_hp', 'attack', 'defense', 'special', 'speed'):
+        if not enemy.get(stat) or enemy[stat] <= 0:
+            template = models.PET_TYPES.get(enemy['type'], {})
+            defaults = {'hp': 100, 'max_hp': 100, 'attack': 20, 'defense': 15, 'special': 20, 'speed': 15}
+            base_key = f'base_{stat}'
+            enemy[stat] = template.get(base_key, defaults.get(stat, 10))
+            if stat == 'hp':
+                enemy['max_hp'] = enemy[stat]
 
     state = {
         'player_pet': pet,
@@ -606,7 +635,12 @@ def api_battle_action():
 
     state = get_battle_state()
     if not state:
-        return jsonify({'success': False, 'message': '没有进行中的战斗'})
+        # Battle state lost (session expired) - allow starting fresh
+        return jsonify({
+            'success': False,
+            'message': '战斗数据已过期，请重新开始战斗',
+            'error_code': 'battle_state_lost'
+        })
 
     player_pet = state['player_pet']
     enemy_pet = state['enemy_pet']

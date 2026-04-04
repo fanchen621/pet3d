@@ -148,6 +148,25 @@ AttributeError: 'NoneType' object has no attribute 'secret_key'
 
 ---
 
+## v2.0.3 — 2026-04-04 修复 Windows 启动/Excel导入/战斗初始化
+
+### 修复的问题
+- **start.bat 启动失败修复**
+  - `chcp 65001` (UTF-8) 在 Windows CMD 中解析中文会导致乱码，批处理命令被拆成碎片执行（如 `'1' is not recognized`）
+  - 改为 `chcp 936` (GBK) 并将批处理文本改为纯 ASCII，彻底解决编码问题
+- **Excel 导入修复**
+  - `.xls` 格式被允许上传但 openpyxl 不支持，导致导入失败
+  - 移除 `.xls` 支持，仅保留 `.xlsx` 和 `.csv`，提示用户将 `.xls` 另存为 `.xlsx`
+- **战斗初始化失败修复**
+  - `api_start_battle` 添加多重防御性检查：宠物类型验证、HP恢复、野宠属性兜底
+  - `api_battle_action` 战斗状态丢失时返回明确错误码 `battle_state_lost`，方便前端处理
+  - 当 `get_active_pet()` 返回 None 但存在其他宠物时，自动选择第一个
+
+### 修改的文件
+- **`start.bat`** — 重写为纯 ASCII 文本，消除中文编码问题
+- **`app.py`** — Excel导入移除.xls支持；战斗初始化添加防御性检查
+- **`CHANGELOG.md`** — 记录本次修复
+
 ## 下次更新备忘
 
 ### 已知可优化

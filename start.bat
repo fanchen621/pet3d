@@ -1,14 +1,13 @@
 @echo off
-chcp 65001 >nul 2>&1
+chcp 936 >nul 2>&1
 setlocal enabledelayedexpansion
-title 精灵宝贝 - 启动器
+title Pet Adventure
 
 echo ============================================
-echo     精灵宝贝 - Pet Adventure
+echo     Pet Adventure - Launcher
 echo ============================================
 echo.
 
-:: ---- Step 1: Find Python ----
 set "PYTHON_CMD="
 
 where python >nul 2>&1
@@ -29,34 +28,32 @@ if not errorlevel 1 (
     goto :found_python
 )
 
-echo [错误] 未找到 Python！
-echo.
-echo 请安装 Python 3.8+ 并勾选 "Add Python to PATH"
-echo 下载地址: https://www.python.org/downloads/
+echo [ERROR] Python not found!
+echo Please install Python 3.8+ and check "Add Python to PATH"
+echo Download: https://www.python.org/downloads/
 echo.
 pause
 exit /b 1
 
 :found_python
-echo [OK] 找到 Python:
+echo [OK] Python found:
 %PYTHON_CMD% --version
 echo.
 
-:: ---- Step 2: Install dependencies ----
-echo [1/2] 安装依赖包 (flask, openpyxl)...
+echo [1/2] Installing dependencies (flask, openpyxl)...
 echo.
 
 %PYTHON_CMD% -m pip install flask openpyxl
 if errorlevel 1 (
     echo.
-    echo ---- pip install 失败，尝试 --user 模式 ----
+    echo Trying --user mode...
     echo.
     %PYTHON_CMD% -m pip install flask openpyxl --user
     if errorlevel 1 (
         echo.
         echo ========================================
-        echo  [错误] 依赖安装失败！
-        echo  请手动运行以下命令安装:
+        echo  [ERROR] Failed to install dependencies!
+        echo  Please run manually:
         echo    %PYTHON_CMD% -m pip install flask openpyxl
         echo ========================================
         echo.
@@ -66,15 +63,14 @@ if errorlevel 1 (
 )
 
 echo.
-echo [OK] 依赖安装完成！
+echo [OK] Dependencies installed!
 echo.
 
-:: ---- Step 3: Launch ----
-echo [2/2] 启动游戏服务器...
+echo [2/2] Starting game server...
 echo.
-echo   游戏地址: http://127.0.0.1:5555
-echo   浏览器将自动打开
-echo   关闭此窗口即可停止游戏
+echo   Game URL: http://127.0.0.1:5555
+echo   Browser will open automatically
+echo   Close this window to stop the game
 echo.
 echo ============================================
 echo.
@@ -85,10 +81,10 @@ set "EXIT_CODE=%errorlevel%"
 echo.
 echo ============================================
 if not "%EXIT_CODE%"=="0" (
-    echo  [错误] 游戏异常退出 (错误代码: %EXIT_CODE%)
-    echo  请查看上方的错误信息
+    echo  [ERROR] Game exited abnormally (code: %EXIT_CODE%)
+    echo  Check error messages above
 ) else (
-    echo  游戏已正常停止
+    echo  Game stopped normally
 )
 echo ============================================
 echo.
