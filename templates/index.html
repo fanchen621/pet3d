@@ -46,6 +46,15 @@
         <div class="achievement-name"></div>
     </div>
 
+    <!-- Gacha Result Overlay -->
+    <div id="gacha-result" class="gacha-result-overlay" style="display:none;">
+        <div class="gacha-result-panel">
+            <div class="gacha-result-title" id="gacha-result-title">🎲 抽取结果</div>
+            <div class="gacha-result-grid" id="gacha-result-grid"></div>
+            <button class="gacha-result-close" id="gacha-result-close">确定</button>
+        </div>
+    </div>
+
     <!-- Battle Result -->
     <div id="battle-result" class="battle-result-overlay">
         <div class="battle-result-icon" id="result-icon">🎉</div>
@@ -236,10 +245,15 @@
             </div>
 
             <div class="student-pet-section" id="student-pet-section">
-                <div class="pet-section-title">🐾 领养宠物</div>
-                <div id="student-pet-display">
-                    <div class="no-pet-hint">该学生还未领养宠物</div>
-                    <div class="pet-choose-grid" id="pet-choose-grid"></div>
+                <div class="pet-section-title">🐾 宠物信息</div>
+                <div id="student-pet-display"></div>
+                <div class="gacha-section">
+                    <div class="gacha-title">🎲 抽取宠物和道具</div>
+                    <div class="gacha-info">消耗积分随机抽取，宠物概率 5%，十连保底出宠物</div>
+                    <div class="gacha-buttons">
+                        <button class="gacha-btn single" id="btn-draw-single">🔮 单抽 <span class="gacha-cost">20积分</span></button>
+                        <button class="gacha-btn ten" id="btn-draw-ten">🎰 十连 <span="gacha-cost">180积分</span></button>
+                    </div>
                 </div>
             </div>
 

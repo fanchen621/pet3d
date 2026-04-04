@@ -190,6 +190,29 @@ AttributeError: 'NoneType' object has no attribute 'secret_key'
 - **`static/js/classroom.js`** — 学生卡片添加头像，上传校验移除.xls
 - **`static/css/style.css`** — 添加头像和属性样式
 
+## v2.0.5 — 2026-04-05 抽卡系统
+
+### 新增功能
+- **学生抽卡系统**：学生用积分抽取宠物和道具，不再是老师直接分配
+  - 单抽：20积分
+  - 十连：180积分（打折优惠）
+  - 宠物概率：5%
+  - 十连保底：至少出1只宠物
+  - 道具池：12种道具（食物/装扮/技能卷轴/特殊道具），按权重随机
+- **抽卡结果弹窗**：卡牌翻转动画，宠物卡金色特效
+
+### 改动
+- 移除旧的「选择宠物」网格，替换为抽卡按钮
+- `app.py` 新增 `/api/student/<id>/draw` 接口
+- `classroom.js` 重写宠物区域为抽卡交互
+- `style.css` 添加抽卡系统全套样式
+
+### 修改的文件
+- **`app.py`** — 新增gacha抽卡API、道具池、宠物概率逻辑
+- **`templates/index.html`** — 学生详情弹窗改为抽卡区域、添加结果弹窗
+- **`static/js/classroom.js`** — 抽卡交互、结果展示、移除旧分配逻辑
+- **`static/css/style.css`** — 抽卡按钮、结果弹窗、卡牌动画
+
 ## 下次更新备忘
 
 ### 已知可优化

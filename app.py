@@ -443,6 +443,115 @@ def api_assign_pet(student_id):
     return jsonify({'success': False, 'message': '分配宠物失败'})
 
 
+# ===== GACHA DRAW =====
+GACHA_COST_SINGLE = 20
+GACHA_COST_TEN = 180
+GACHA_PET_RATE = 0.05  # 5% per draw
+
+GACHA_ITEMS = [
+    {'id': 'apple', 'name': '魔法苹果', 'emoji': '🍎', 'type': 'food', 'weight': 25},
+    {'id': 'candy', 'name': '彩虹糖果', 'emoji': '🍬', 'type': 'food', 'weight': 25},
+    {'id': 'potion', 'name': '经验药水', 'emoji': '🧪', 'type': 'food', 'weight': 15},
+    {'id': 'hat_flower', 'name': '花环', 'emoji': '💐', 'type': 'costume', 'weight': 10},
+    {'id': 'acc_glasses', 'name': '酷炫墨镜', 'emoji': '🕶️', 'type': 'costume', 'weight': 8},
+    {'id': 'scroll_fire', 'name': '火焰技能卷轴', 'emoji': '📜', 'type': 'skill', 'weight': 5},
+    {'id': 'scroll_ice', 'name': '冰霜技能卷轴', 'emoji': '📜', 'type': 'skill', 'weight': 5},
+    {'id': 'scroll_elec', 'name': '雷电技能卷轴', 'emoji': '📜', 'type': 'skill', 'weight': 5},
+    {'id': 'scroll_nature', 'name': '自然技能卷轴', 'emoji': '📜', 'type': 'skill', 'weight': 5},
+    {'id': 'revive', 'name': '复活药水', 'emoji': '💖', 'type': 'special', 'weight': 7},
+    {'id': 'exp_boost', 'name': '经验加倍卡', 'emoji': '⚡', 'type': 'special', 'weight': 5},
+    {'id': 'lucky', 'name': '幸运符', 'emoji': '🍀', 'type': 'special', 'weight': 5},
+]
+
+PET_TYPES_LIST = list(models.PET_TYPES.keys())
+
+
+def _gacha_draw_one():
+    """Do one gacha draw. Returns item or pet."""
+    if random.random() < GACHA_PET_RATE:
+        pet_type = random.choice(PET_TYPES_LIST)
+        template = models.PET_TYPES[pet_type]
+        return {'type': 'pet', 'pet_type': pet_type, 'name': template['name'],
+                'emoji': _PetHelper.emoji(pet_type), 'rarity': template['rarity']}
+    else:
+        total_w = sum(i['weight'] for i in GACHA_ITEMS)
+        roll = random.randint(1, total_w)
+        acc = 0
+        for item in GACHA_ITEMS:
+            acc += item['weight']
+            if roll <= acc:
+                return {'type': 'item', 'item_id': item['id'], 'name': item['name'],
+                        'emoji': item['emoji'], 'item_type': item['type']}
+
+
+# Helper for pet emoji (used in gacha)
+class _PetHelper:
+    EMOJIS = {
+        'dragon': '🐉', 'fox': '🦊', 'bear': '🐻', 'rabbit': '🐰', 'cat': '🐱', 'angel': '👼',
+        'phoenix': '🔥', 'krystal': '🐬', 'tiger': '🐯', 'sprite': '🌿', 'wolf': '🐺', 'unicorn': '🦄'
+    }
+    @staticmethod
+    def emoji(t): return _PetHelper.EMOJIS.get(t, '🐾')
+
+
+@app.route('/api/student/<int:student_id>/draw', methods=['POST'])
+def api_draw_pet(student_id):
+    """Student draws pets/items with points. Supports single (20pts) and ten-draw (180pts, pity pet)."""
+    data = request.json or {}
+    count = int(data.get('count', 1))
+    if count not in (1, 10):
+        return jsonify({'success': False, 'message': '仅支持单抽(1)或十连(10)'})
+
+    cost = GACHA_COST_TEN if count == 10 else GACHA_COST_SINGLE
+
+    student = db.get_student(student_id)
+    if not student:
+        return jsonify({'success': False, 'message': '学生不存在'})
+
+    if student['current_points'] < cost:
+        return jsonify({'success': False, 'message': f'积分不足！需要{cost}积分，当前{student["current_points"]}积分'})
+
+    # Deduct points
+    db.update_student_points(student_id, -cost, f'{"十连" if count == 10 else "单"}抽', source='gacha')
+
+    results = []
+    has_pet = False
+    for i in range(count):
+        roll = _gacha_draw_one()
+        results.append(roll)
+        if roll['type'] == 'pet':
+            has_pet = True
+
+    # Pity: ten-draw guarantees at least one pet
+    if count == 10 and not has_pet:
+        pet_type = random.choice(PET_TYPES_LIST)
+        template = models.PET_TYPES[pet_type]
+        results[9] = {'type': 'pet', 'pet_type': pet_type, 'name': template['name'],
+                       'emoji': _PetHelper.emoji(pet_type), 'rarity': template['rarity']}
+        has_pet = True
+
+    # Apply results: save pets, add items to inventory
+    saved_pets = []
+    for r in results:
+        if r['type'] == 'pet':
+            pet_data = models.create_pet(r['pet_type'])
+            pet_data['student_id'] = student_id
+            pet_data = db.save_pet(pet_data)
+            # Update student pet info
+            db.assign_pet_to_student(student_id, r['pet_type'], pet_data.get('name'))
+            saved_pets.append(pet_data)
+        elif r['type'] == 'item':
+            db.add_inventory_item(1, r['item_id'], {'name': r['name']})
+
+    return jsonify({
+        'success': True,
+        'results': results,
+        'saved_pets': saved_pets,
+        'student': db.get_student(student_id),
+        'classroom_stats': db.get_classroom_stats(),
+    })
+
+
 @app.route('/api/student/<int:student_id>/delete', methods=['POST'])
 def api_delete_student(student_id):
     db.delete_student(student_id)

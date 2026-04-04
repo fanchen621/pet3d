@@ -249,7 +249,7 @@ const Classroom = {
         } catch (e) {}
 
         document.getElementById('student-avatar').textContent = student.gender === '女' ? '👧' : '🧑';
-        document.getElementById('student-detail-name').textContent = student.name;
+        document.getElementById('student-detail-name').textContent = student.name || '未命名';
         document.getElementById('student-detail-no').textContent = student.student_no ? `学号: ${student.student_no}` : '';
         document.getElementById('student-points-value').textContent = student.current_points;
 
@@ -274,17 +274,21 @@ const Classroom = {
                             <span>⚔️ ${student.pet_combat_power || 0}</span>
                         </div>
                     </div>
-                </div>
-                <div class="pet-choose-label">更换宠物:</div>
-                <div class="pet-choose-grid" id="pet-choose-grid"></div>`;
+                </div>`;
         } else {
-            petSection.innerHTML = `
-                <div class="no-pet-hint">该学生还未领养宠物，选择一只吧！</div>
-                <div class="pet-choose-grid" id="pet-choose-grid"></div>`;
+            petSection.innerHTML = `<div class="no-pet-hint">该学生还未获得宠物，去抽卡吧！</div>`;
         }
 
-        // Build pet choose grid
-        this.buildPetChooseGrid(student.id);
+        // Bind gacha buttons
+        const bindDraw = (btnId, count) => {
+            const btn = document.getElementById(btnId);
+            if (btn) {
+                btn.replaceWith(btn.cloneNode(true)); // remove old listeners
+                document.getElementById(btnId).addEventListener('click', () => this.drawGacha(student.id, count));
+            }
+        };
+        bindDraw('btn-draw-single', 1);
+        bindDraw('btn-draw-ten', 10);
 
         // Point logs
         try {
@@ -297,25 +301,82 @@ const Classroom = {
         document.getElementById('student-modal')?.classList.add('active');
     },
 
-    buildPetChooseGrid(studentId) {
-        const grid = document.getElementById('pet-choose-grid');
-        if (!grid) return;
+    async drawGacha(studentId, count) {
+        try {
+            const res = await App.api(`/api/student/${studentId}/draw`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ count })
+            });
 
+            if (!res.success) {
+                App.showToast(res.message || '抽卡失败', 'error');
+                return;
+            }
+
+            // Show gacha result overlay
+            this.showGachaResults(res.results, count);
+
+            // Update student data
+            this.currentStudent = res.student;
+            this.stats = res.classroom_stats || {};
+            const idx = this.students.findIndex(s => s.id === studentId);
+            if (idx >= 0) this.students[idx] = res.student;
+            this.renderStudentGrid();
+            this.updateStats();
+
+            // Update points display
+            document.getElementById('student-points-value').textContent = res.student.current_points;
+
+            // Refresh pet section after closing gacha result
+            this._gachaRefreshStudent = res.student;
+
+        } catch (e) {
+            App.showToast('抽卡失败', 'error');
+        }
+    },
+
+    showGachaResults(results, count) {
+        const overlay = document.getElementById('gacha-result');
+        const grid = document.getElementById('gacha-result-grid');
+        const title = document.getElementById('gacha-result-title');
+        const closeBtn = document.getElementById('gacha-result-close');
+        if (!overlay || !grid) return;
+
+        title.textContent = count === 10 ? '🎰 十连结果' : '🔮 单抽结果';
         grid.innerHTML = '';
-        const allTypes = Object.entries(Pets3D.petTypes);
 
-        allTypes.forEach(([type, info]) => {
-            const btn = document.createElement('button');
-            btn.className = 'pet-choose-btn';
-            const emoji = this.getPetEmoji(type);
-            const color = this.getElementColor(type);
-            btn.style.borderColor = color + '40';
-            btn.innerHTML = `<span class="pet-choose-emoji">${emoji}</span><span class="pet-choose-name">${info.name}</span>`;
-            btn.onmouseenter = () => btn.style.borderColor = color;
-            btn.onmouseleave = () => btn.style.borderColor = color + '40';
-            btn.onclick = () => this.assignPet(studentId, type);
-            grid.appendChild(btn);
+        results.forEach((r, i) => {
+            const card = document.createElement('div');
+            card.className = 'gacha-item-card';
+            if (r.type === 'pet') {
+                const color = this.getElementColor(r.pet_type);
+                card.classList.add('gacha-pet');
+                card.style.borderColor = color;
+                card.style.background = `radial-gradient(ellipse at center, ${color}33, rgba(0,0,0,0.5))`;
+                card.innerHTML = `
+                    <div class="gacha-item-emoji">${r.emoji}</div>
+                    <div class="gacha-item-name" style="color:${color}">${r.name}</div>
+                    <div class="gacha-item-tag pet-tag">🐾 宠物</div>`;
+            } else {
+                card.innerHTML = `
+                    <div class="gacha-item-emoji">${r.emoji}</div>
+                    <div class="gacha-item-name">${r.name}</div>
+                    <div class="gacha-item-tag item-tag">📦 道具</div>`;
+            }
+            card.style.animationDelay = `${i * 0.1}s`;
+            grid.appendChild(card);
         });
+
+        overlay.style.display = 'flex';
+
+        closeBtn.onclick = () => {
+            overlay.style.display = 'none';
+            if (this._gachaRefreshStudent) {
+                this.showStudentDetail(this._gachaRefreshStudent);
+                this._gachaRefreshStudent = null;
+            }
+        };
     },
 
     renderPointLogs(logs) {
@@ -396,34 +457,6 @@ const Classroom = {
             }
         } catch (e) {
             App.showToast('操作失败', 'error');
-        }
-    },
-
-    async assignPet(studentId, petType) {
-        try {
-            const res = await App.api(`/api/student/${studentId}/assign_pet`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ pet_type: petType })
-            });
-
-            if (res.success) {
-                this.currentStudent = res.student;
-                this.stats = res.classroom_stats || {};
-                const idx = this.students.findIndex(s => s.id === studentId);
-                if (idx >= 0) this.students[idx] = res.student;
-                this.renderStudentGrid();
-                this.updateStats();
-
-                App.showToast(`${res.student.name} 领养了 ${res.pet.name}！`, 'success');
-
-                // Re-render pet section
-                this.showStudentDetail(res.student);
-            } else {
-                App.showToast(res.message || '分配宠物失败', 'error');
-            }
-        } catch (e) {
-            App.showToast('分配宠物失败', 'error');
         }
     }
 };
